@@ -20,7 +20,7 @@ app.use(cors({
     'http://localhost:3000',  // Common React default port
     'http://localhost:3001',  // Your current frontend port
     'http://localhost:7000',  // Your backend port
-    true  // Allow dynamic origins (use cautiously)
+    // true  // Allow dynamic origins (use cautiously)
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'X-Requested-With', 'Accept'],
@@ -30,18 +30,18 @@ app.use(cors({
 app.use(bodyParser.json());
 
 // Optional: Additional CORS headers middleware
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+// app.use((req, res, next) => {
+//   res.header('Access-Control-Allow-Origin', '*');
+//   res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
+//   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
   
-  // Intercept OPTIONS method
-  if ('OPTIONS' === req.method) {
-    res.sendStatus(200);
-  } else {
-    next();
-  }
-});
+//   // Intercept OPTIONS method
+//   if ('OPTIONS' === req.method) {
+//     res.sendStatus(200);
+//   } else {
+//     next();
+//   }
+// });
 
 // Register routes
 app.use('/api', patientRoutes);
