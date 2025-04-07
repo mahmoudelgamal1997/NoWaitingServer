@@ -4,6 +4,8 @@ const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const patientRoutes = require('./routes/patientRoutes');
 const searchRoutes = require('./routes/searchRoutes');
+const doctorRoutes = require('./routes/doctorRoutes');
+
 const cors = require('cors');
 
 // Load environment variables
@@ -48,6 +50,7 @@ app.use(bodyParser.json());
 // Register routes
 app.use('/api', patientRoutes);
 app.use('/api', searchRoutes);
+app.use('/api', doctorRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
