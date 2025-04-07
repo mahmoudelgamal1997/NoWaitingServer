@@ -17,6 +17,8 @@ const app = express();
 // More comprehensive CORS configuration
 app.use(cors({
   origin: [
+    'https://drwaiting-30f56.web.app',
+    'https://drwaiting-30f56.firebaseapp.com',
     'http://localhost:3000',  // Common React default port
     'http://localhost:3001',  // Your current frontend port
     'http://localhost:7000',  // Your backend port
