@@ -9,7 +9,7 @@ const {
     createPatientVisit, 
     getPatientVisitHistory, 
     updatePatientVisit 
-} = require('../controllers/visitController'); // New controller for visits
+} = require('../controllers/visitController');
 
 // Middleware to verify authentication - example (implement your actual auth middleware)
 const authenticateUser = (req, res, next) => {
