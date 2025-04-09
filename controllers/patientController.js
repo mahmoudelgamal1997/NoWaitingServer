@@ -1,4 +1,5 @@
 const Patient = require('../models/patient');
+const { v4: uuidv4 } = require('uuid');
 
 // Save patient data - now with doctor_id
 const savePatient = async (req, res) => {
@@ -41,14 +42,22 @@ const savePatient = async (req, res) => {
             age,
             address,
             visit_type,
-            receipt
+            receipt,
+            visits: [] // Explicitly set empty visits array
         });
 
         await newPatient.save();
 
-        res.status(201).json({ message: 'Patient saved successfully', patient: newPatient });
+        res.status(201).json({ 
+            message: 'Patient saved successfully', 
+            patient: newPatient 
+        });
     } catch (error) {
-        res.status(500).json({ message: 'Error saving patient', error: error.message });
+        console.error('Error saving patient:', error);
+        res.status(500).json({ 
+            message: 'Error saving patient', 
+            error: error.message 
+        });
     }
 };
 

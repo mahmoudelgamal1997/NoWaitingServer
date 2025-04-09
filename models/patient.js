@@ -1,5 +1,4 @@
 const mongoose = require('mongoose');
-const { v4: uuidv4 } = require('uuid');
 
 const drugSchema = new mongoose.Schema({
     drug: { 
@@ -39,8 +38,7 @@ const receiptSchema = new mongoose.Schema({
 const visitSchema = new mongoose.Schema({
     visit_id: { 
         type: String, 
-        default: uuidv4,
-        unique: true 
+        default: null 
     },
     date: { 
         type: Date, 
@@ -63,7 +61,7 @@ const visitSchema = new mongoose.Schema({
         default: "" 
     },
     receipts: [receiptSchema]
-});
+}, { _id: true });
 
 const patientSchema = new mongoose.Schema({
     patient_name: { 
@@ -126,12 +124,12 @@ const patientSchema = new mongoose.Schema({
         type: String, 
         default: "" 
     },
-    visits: [visitSchema]
+    visits: {
+        type: [visitSchema],
+        default: []
+    }
 }, { 
     timestamps: true 
 });
-
-// Ensure visit_id is unique across all patients
-patientSchema.index({ 'visits.visit_id': 1 }, { unique: true });
 
 module.exports = mongoose.model('Patient', patientSchema);

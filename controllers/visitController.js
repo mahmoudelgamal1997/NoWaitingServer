@@ -44,7 +44,7 @@ const createPatientVisit = async (req, res) => {
 
         // Create new visit object
         const newVisit = {
-            visit_id,
+            visit_id, // Add the unique visit_id
             visit_type,
             complaint,
             diagnosis,
@@ -213,8 +213,96 @@ const updatePatientVisit = async (req, res) => {
     }
 };
 
+// Get a specific visit details
+const getVisitDetails = async (req, res) => {
+    try {
+        const { patient_id, doctor_id, visit_id } = req.params;
+
+        // Validate required fields
+        if (!patient_id || !doctor_id || !visit_id) {
+            return res.status(400).json({ message: 'Patient ID, Doctor ID, and Visit ID are required' });
+        }
+
+        // Find the patient
+        const patient = await Patient.findOne({ patient_id, doctor_id });
+        
+        if (!patient) {
+            return res.status(404).json({ message: 'Patient not found' });
+        }
+
+        // Find the specific visit
+        const visit = patient.visits.find(visit => visit.visit_id === visit_id);
+        
+        if (!visit) {
+            return res.status(404).json({ message: 'Visit not found' });
+        }
+
+        res.status(200).json({
+            message: 'Visit details retrieved successfully',
+            visit: visit,
+            patient_info: {
+                name: patient.patient_name,
+                phone: patient.patient_phone,
+                age: patient.age,
+                address: patient.address
+            }
+        });
+    } catch (error) {
+        console.error('Error retrieving visit details:', error);
+        res.status(500).json({
+            message: 'Error retrieving visit details',
+            error: error.message
+        });
+    }
+};
+
+// Delete a specific visit
+const deleteVisit = async (req, res) => {
+    try {
+        const { patient_id, doctor_id, visit_id } = req.params;
+
+        // Validate required fields
+        if (!patient_id || !doctor_id || !visit_id) {
+            return res.status(400).json({ message: 'Patient ID, Doctor ID, and Visit ID are required' });
+        }
+
+        // Find the patient
+        const patient = await Patient.findOne({ patient_id, doctor_id });
+        
+        if (!patient) {
+            return res.status(404).json({ message: 'Patient not found' });
+        }
+
+        // Find the index of the specific visit
+        const visitIndex = patient.visits.findIndex(visit => visit.visit_id === visit_id);
+        
+        if (visitIndex === -1) {
+            return res.status(404).json({ message: 'Visit not found' });
+        }
+
+        // Remove the visit from the visits array
+        patient.visits.splice(visitIndex, 1);
+
+        // Save the patient
+        await patient.save();
+
+        res.status(200).json({
+            message: 'Visit deleted successfully',
+            deletedVisitId: visit_id
+        });
+    } catch (error) {
+        console.error('Error deleting visit:', error);
+        res.status(500).json({
+            message: 'Error deleting visit',
+            error: error.message
+        });
+    }
+};
+
 module.exports = { 
     createPatientVisit, 
     getPatientVisitHistory, 
-    updatePatientVisit 
+    updatePatientVisit,
+    getVisitDetails,
+    deleteVisit
 };
