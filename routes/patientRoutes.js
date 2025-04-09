@@ -1,6 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const { savePatient, getAllPatients, getPatientsByDoctor, updatePatient } = require('../controllers/patientController');
+const { 
+    savePatient, 
+    getAllPatients, 
+    getPatientsByDoctor 
+} = require('../controllers/patientController');
+const { 
+    createPatientVisit, 
+    getPatientVisitHistory, 
+    updatePatientVisit 
+} = require('../controllers/visitController'); // New controller for visits
 
 // Middleware to verify authentication - example (implement your actual auth middleware)
 const authenticateUser = (req, res, next) => {
@@ -11,16 +20,19 @@ const authenticateUser = (req, res, next) => {
     next();
 };
 
-// Route to save patient data
+// Existing patient routes
 router.post('/patients', authenticateUser, savePatient);
-
-// Route to get patients for a specific doctor (secure route)
 router.get('/patients/doctor/:doctor_id', authenticateUser, getPatientsByDoctor);
-
-// Route to get all patients (admin only)
 router.get('/patients', authenticateUser, getAllPatients);
 
-// Route to update a patient report (add receipt)
-router.put('/patients/:id', authenticateUser, updatePatient);
+// New visit-related routes
+// Create a new visit for a patient
+router.post('/patients/visits', authenticateUser, createPatientVisit);
+
+// Get patient visit history
+router.get('/patients/visits', authenticateUser, getPatientVisitHistory);
+
+// Update a specific visit
+router.put('/patients/:patient_id/visits/:visit_id', authenticateUser, updatePatientVisit);
 
 module.exports = router;
