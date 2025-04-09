@@ -1,5 +1,4 @@
 const Patient = require('../models/patient');
-const { v4: uuidv4 } = require('uuid');
 
 // Save patient data - now with doctor_id
 const savePatient = async (req, res) => {
@@ -25,6 +24,18 @@ const savePatient = async (req, res) => {
         // Validation for required doctor_id
         if (!doctor_id) {
             return res.status(400).json({ message: 'Doctor ID is required' });
+        }
+
+        // Check if patient with same patient_id and doctor_id already exists
+        const existingPatient = await Patient.findOne({ 
+            patient_id, 
+            doctor_id 
+        });
+
+        if (existingPatient) {
+            return res.status(400).json({ 
+                message: 'Patient with this ID already exists for this doctor' 
+            });
         }
 
         const newPatient = new Patient({
@@ -54,6 +65,15 @@ const savePatient = async (req, res) => {
         });
     } catch (error) {
         console.error('Error saving patient:', error);
+        
+        // Handle duplicate key error
+        if (error.code === 11000) {
+            return res.status(400).json({
+                message: 'A patient with this ID already exists',
+                error: error.message
+            });
+        }
+        
         res.status(500).json({ 
             message: 'Error saving patient', 
             error: error.message 

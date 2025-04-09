@@ -37,8 +37,7 @@ const receiptSchema = new mongoose.Schema({
 
 const visitSchema = new mongoose.Schema({
     visit_id: { 
-        type: String, 
-        default: null 
+        type: String 
     },
     date: { 
         type: Date, 
@@ -131,5 +130,8 @@ const patientSchema = new mongoose.Schema({
 }, { 
     timestamps: true 
 });
+
+// Remove the unique index
+patientSchema.index({ 'visits.visit_id': 1 });
 
 module.exports = mongoose.model('Patient', patientSchema);
