@@ -1,10 +1,44 @@
 const mongoose = require('mongoose');
 
+const drugSchema = new mongoose.Schema({
+    drug: { 
+        type: String, 
+        required: true 
+    },
+    frequency: { 
+        type: String, 
+        required: true 
+    },
+    period: { 
+        type: String, 
+        required: true 
+    },
+    timing: { 
+        type: String, 
+        required: true 
+    }
+});
+
+const receiptSchema = new mongoose.Schema({
+    drugs: [drugSchema],
+    notes: { 
+        type: String, 
+        default: "" 
+    },
+    date: { 
+        type: Date, 
+        default: Date.now 
+    },
+    drugModel: { 
+        type: String, 
+        default: "new" 
+    }
+});
+
 const visitSchema = new mongoose.Schema({
     visit_id: { 
         type: String, 
-        required: true, 
-        unique: true 
+        default: () => mongoose.Types.ObjectId().toString()
     },
     date: { 
         type: Date, 
@@ -26,43 +60,73 @@ const visitSchema = new mongoose.Schema({
         type: String, 
         default: "" 
     },
-    receipts: [{
-        drugs: [{
-            drug: { type: String, required: true },
-            frequency: { type: String, required: true },
-            period: { type: String, required: true },
-            timing: { type: String, required: true }
-        }],
-        notes: { type: String, default: "" },
-        date: { type: Date, default: Date.now },
-        drugModel: { type: String, default: "new" }
-    }]
-}, { 
-    // Add a timestamp option to automatically manage createdAt and updatedAt
-    timestamps: true 
+    receipts: [receiptSchema]
 });
 
 const patientSchema = new mongoose.Schema({
-    patient_name: { type: String, required: true },
-    patient_phone: { type: String, required: true },
-    patient_id: { type: String, required: true },
-    doctor_id: { type: String, required: true },
-    doctor_name: { type: String, default:"" },
-    age: { type: String, default: "" },
-    address: { type: String, default: ""},
-    fcmToken: { type: String, default: "" },
+    patient_name: { 
+        type: String, 
+        required: true 
+    },
+    patient_phone: { 
+        type: String, 
+        required: true 
+    },
+    patient_id: { 
+        type: String, 
+        required: true 
+    },
+    doctor_id: { 
+        type: String, 
+        required: true 
+    },
+    doctor_name: { 
+        type: String, 
+        default: "" 
+    },
+    date: { 
+        type: String, 
+        default: () => new Date().toISOString().split('T')[0] 
+    },
+    time: { 
+        type: String, 
+        default: () => new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) 
+    },
+    status: { 
+        type: String, 
+        default: 'WAITING' 
+    },
+    position: { 
+        type: Number, 
+        default: 0 
+    },
+    fcmToken: { 
+        type: String, 
+        default: "" 
+    },
+    token: { 
+        type: String, 
+        default: "" 
+    },
+    age: { 
+        type: String, 
+        default: "" 
+    },
+    address: { 
+        type: String, 
+        default: "" 
+    },
+    visit_type: { 
+        type: String, 
+        default: "كشف" 
+    },
+    receipt: { 
+        type: String, 
+        default: "" 
+    },
     visits: [visitSchema]
-}, {
-    // Add a timestamp option to automatically manage createdAt and updatedAt
+}, { 
     timestamps: true 
-});
-
-// Add a virtual to get the most recent visit
-patientSchema.virtual('latest_visit').get(function() {
-    return this.visits.length > 0 
-        ? this.visits.reduce((latest, visit) => 
-            (!latest || visit.date > latest.date) ? visit : latest, null)
-        : null;
 });
 
 module.exports = mongoose.model('Patient', patientSchema);

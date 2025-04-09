@@ -1,5 +1,4 @@
 const Patient = require('../models/patient');
-const { v4: uuidv4 } = require('uuid');
 
 // Create a new visit for a patient
 const createPatientVisit = async (req, res) => {
@@ -39,12 +38,8 @@ const createPatientVisit = async (req, res) => {
             }
         }
 
-        // Generate a unique visit ID
-        const visit_id = uuidv4();
-
         // Create new visit object
         const newVisit = {
-            visit_id,
             visit_type,
             complaint,
             diagnosis,
@@ -63,7 +58,7 @@ const createPatientVisit = async (req, res) => {
         res.status(201).json({
             message: 'Visit created successfully',
             visit: {
-                visit_id: newVisit.visit_id,
+                visit_id: newVisit._id.toString(),
                 visit_type: newVisit.visit_type,
                 complaint: newVisit.complaint,
                 diagnosis: newVisit.diagnosis,
@@ -131,7 +126,10 @@ const getPatientVisitHistory = async (req, res) => {
                 totalPages: Math.ceil(sortedVisits.length / limit),
                 totalVisits: sortedVisits.length
             },
-            visits: paginatedVisits
+            visits: paginatedVisits.map(visit => ({
+                ...visit.toObject(),
+                visit_id: visit._id.toString()
+            }))
         });
     } catch (error) {
         console.error('Error retrieving patient visit history:', error);
@@ -156,7 +154,7 @@ const updatePatientVisit = async (req, res) => {
         }
 
         // Find the specific visit
-        const visitIndex = patient.visits.findIndex(visit => visit.visit_id === visit_id);
+        const visitIndex = patient.visits.findIndex(visit => visit._id.toString() === visit_id);
         
         if (visitIndex === -1) {
             return res.status(404).json({ message: 'Visit not found' });
@@ -193,7 +191,10 @@ const updatePatientVisit = async (req, res) => {
 
         res.status(200).json({
             message: 'Visit updated successfully',
-            visit: patient.visits[visitIndex]
+            visit: {
+                ...patient.visits[visitIndex].toObject(),
+                visit_id: patient.visits[visitIndex]._id.toString()
+            }
         });
     } catch (error) {
         console.error('Error updating patient visit:', error);
