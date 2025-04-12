@@ -145,29 +145,32 @@ const getAllPatients = async (req, res) => {
 };
 
 // Update patient receipt - now updates the most recent visit's receipts
+// In your updatePatient controller
 const updatePatient = async (req, res) => {
     try {
         const patientId = req.params.id;
-        const { doctor_id } = req.query; // Get doctor_id from query params for verification
+        const { doctor_id } = req.query;
         const {
             drugModel,
             drugs,
             notes,
-            visit_id // Optional: specify which visit to update
+            visit_id,
+            complaint,  // Accept these fields
+            diagnosis   // Accept these fields
         } = req.body;
 
-        // Find the patient first to verify doctor_id
+        // Find the patient
         const patient = await Patient.findById(patientId);
         if (!patient) {
             return res.status(404).json({ message: 'Patient not found' });
         }
 
-        // Check if the patient belongs to the doctor making the request
+        // Check authorization
         if (doctor_id && patient.doctor_id !== doctor_id) {
             return res.status(403).json({ message: 'Not authorized to update this patient' });
         }
 
-        // Prepare the receipt object
+        // Prepare the receipt
         const newReceipt = {
             drugs: drugs || [],
             notes: notes || "",
@@ -175,44 +178,60 @@ const updatePatient = async (req, res) => {
             date: new Date()
         };
 
-        // If visit_id is provided, update that specific visit's receipts
+        let visitIndex = -1;
+        
+        // Find which visit to update
         if (visit_id && patient.visits.length > 0) {
-            const visitIndex = patient.visits.findIndex(v => v.visit_id === visit_id);
+            visitIndex = patient.visits.findIndex(v => v.visit_id === visit_id);
             if (visitIndex === -1) {
                 return res.status(404).json({ message: 'Visit not found' });
             }
-            
-            patient.visits[visitIndex].receipts.push(newReceipt);
         } else if (patient.visits.length > 0) {
-            // Otherwise, update the most recent visit's receipts
-            patient.visits[patient.visits.length - 1].receipts.push(newReceipt);
+            // Use the most recent visit
+            visitIndex = patient.visits.length - 1;
         } else {
-            // If no visits exist, create one
-            patient.visits.push({
+            // Create a new visit if none exists
+            const newVisit = {
                 visit_id: uuidv4(),
                 date: new Date(),
+                complaint: complaint || "",
+                diagnosis: diagnosis || "",
                 receipts: [newReceipt]
-            });
+            };
+            patient.visits.push(newVisit);
+            visitIndex = 0;
         }
 
-        // Create a receipt string for backward compatibility
+        // Update the visit with the new receipt and complaint/diagnosis if provided
+        if (visitIndex >= 0) {
+            patient.visits[visitIndex].receipts.push(newReceipt);
+            
+            // Update complaint and diagnosis if provided
+            if (complaint !== undefined) {
+                patient.visits[visitIndex].complaint = complaint;
+            }
+            
+            if (diagnosis !== undefined) {
+                patient.visits[visitIndex].diagnosis = diagnosis;
+            }
+        }
+
+        // Update receipt string for backward compatibility
         const receiptString = drugs ? drugs.map(drug =>
             `الدواء: ${drug.drug} | التكرار: ${drug.frequency} | المدة: ${drug.period} | التوقيت: ${drug.timing}`
         ).join(' || ') : '';
-
-        // Update the patient's receipt string (for backward compatibility)
         patient.receipt = receiptString;
 
         await patient.save();
 
         res.status(200).json({
-            message: 'Patient receipt updated successfully',
+            message: 'Patient updated successfully',
             patient: patient
         });
     } catch (error) {
-        console.error('Error updating patient receipt:', error);
+        console.error('Error updating patient:', error);
         res.status(500).json({
-            message: 'Error updating patient receipt',
+            message: 'Error updating patient',
             error: error.message
         });
     }
