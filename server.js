@@ -16,7 +16,7 @@ connectDB();
 
 const app = express();
 
-// More comprehensive CORS configuration
+// Updated CORS configuration with cache-control headers
 app.use(cors({
   origin: [
     'https://drwaiting-30f56.web.app',
@@ -27,25 +27,20 @@ app.use(cors({
     // true  // Allow dynamic origins (use cautiously)
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'X-Requested-With', 'Accept'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'Origin', 
+    'X-Requested-With', 
+    'Accept',
+    'Cache-Control',   // Added for cache-busting
+    'Pragma',          // Added for cache-busting
+    'Expires'          // Added for cache-busting
+  ],
   credentials: true
 }));
 
 app.use(bodyParser.json());
-
-// Optional: Additional CORS headers middleware
-// app.use((req, res, next) => {
-//   res.header('Access-Control-Allow-Origin', '*');
-//   res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS');
-//   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
-  
-//   // Intercept OPTIONS method
-//   if ('OPTIONS' === req.method) {
-//     res.sendStatus(200);
-//   } else {
-//     next();
-//   }
-// });
 
 // Register routes
 app.use('/api', patientRoutes);
