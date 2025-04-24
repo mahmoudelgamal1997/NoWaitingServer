@@ -28,27 +28,29 @@ const updateDoctorSettings = async (req, res) => {
             doctor = new Doctor({
                 doctor_id,
                 settings: {
-                    receiptHeader,
-                    receiptFooter,
-                    clinicName,
-                    doctorTitle,
-                    clinicAddress,
-                    clinicPhone,
-                    logoUrl
+                    receiptHeader: receiptHeader !== undefined ? receiptHeader : '',
+                    receiptFooter: receiptFooter !== undefined ? receiptFooter : '',
+                    clinicName: clinicName !== undefined ? clinicName : '',
+                    doctorTitle: doctorTitle !== undefined ? doctorTitle : '',
+                    clinicAddress: clinicAddress !== undefined ? clinicAddress : '',
+                    clinicPhone: clinicPhone !== undefined ? clinicPhone : '',
+                    logoUrl: logoUrl !== undefined ? logoUrl : ''
                 },
                 updatedAt: new Date()
             });
             await doctor.save();
         } else {
             // Update existing doctor settings
+            // Important: use checking against undefined, not the || operator
+            // This allows empty strings to be set intentionally
             doctor.settings = {
-                receiptHeader: receiptHeader || doctor.settings.receiptHeader,
-                receiptFooter: receiptFooter || doctor.settings.receiptFooter,
-                clinicName: clinicName || doctor.settings.clinicName,
-                doctorTitle: doctorTitle || doctor.settings.doctorTitle,
-                clinicAddress: clinicAddress || doctor.settings.clinicAddress,
-                clinicPhone: clinicPhone || doctor.settings.clinicPhone,
-                logoUrl: logoUrl || doctor.settings.logoUrl
+                receiptHeader: receiptHeader !== undefined ? receiptHeader : doctor.settings.receiptHeader,
+                receiptFooter: receiptFooter !== undefined ? receiptFooter : doctor.settings.receiptFooter,
+                clinicName: clinicName !== undefined ? clinicName : doctor.settings.clinicName,
+                doctorTitle: doctorTitle !== undefined ? doctorTitle : doctor.settings.doctorTitle,
+                clinicAddress: clinicAddress !== undefined ? clinicAddress : doctor.settings.clinicAddress,
+                clinicPhone: clinicPhone !== undefined ? clinicPhone : doctor.settings.clinicPhone,
+                logoUrl: logoUrl !== undefined ? logoUrl : doctor.settings.logoUrl
             };
             doctor.updatedAt = new Date();
             await doctor.save();
