@@ -23,6 +23,7 @@ const savePatient = async (req, res) => {
             diagnosis = ""  // Added for initial visit
         } = req.body;
 
+        
         // Validation for required doctor_id
         if (!doctor_id) {
             return res.status(400).json({ message: 'Doctor ID is required' });
@@ -146,6 +147,7 @@ const getAllPatients = async (req, res) => {
 
 // Update patient receipt - now updates the most recent visit's receipts
 // In your updatePatient controller
+// Update the updatePatient function in patientController.js
 const updatePatient = async (req, res) => {
     try {
         const patientId = req.params.id;
@@ -155,8 +157,8 @@ const updatePatient = async (req, res) => {
             drugs,
             notes,
             visit_id,
-            complaint,  // Accept these fields
-            diagnosis   // Accept these fields
+            complaint,
+            diagnosis
         } = req.body;
 
         // Find the patient
@@ -180,20 +182,24 @@ const updatePatient = async (req, res) => {
 
         let visitIndex = -1;
         
-        // Find which visit to update
+        // Find which visit to update - with improved visit finding logic
         if (visit_id && patient.visits.length > 0) {
             visitIndex = patient.visits.findIndex(v => v.visit_id === visit_id);
+            
             if (visitIndex === -1) {
+                // If visit not found by ID but was provided, return error
                 return res.status(404).json({ message: 'Visit not found' });
             }
         } else if (patient.visits.length > 0) {
-            // Use the most recent visit
+            // Use the most recent visit - ONLY if no visit_id was provided
             visitIndex = patient.visits.length - 1;
         } else {
-            // Create a new visit if none exists
+            // Create a new visit ONLY if none exists
             const newVisit = {
                 visit_id: uuidv4(),
                 date: new Date(),
+                time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
+                visit_type: "كشف",
                 complaint: complaint || "",
                 diagnosis: diagnosis || "",
                 receipts: [newReceipt]
@@ -204,7 +210,16 @@ const updatePatient = async (req, res) => {
 
         // Update the visit with the new receipt and complaint/diagnosis if provided
         if (visitIndex >= 0) {
-            patient.visits[visitIndex].receipts.push(newReceipt);
+            // Only push new receipt if there are drugs to add
+            if (drugs && drugs.length > 0) {
+                patient.visits[visitIndex].receipts.push(newReceipt);
+            
+                // Update receipt string for backward compatibility
+                const receiptString = drugs.map(drug =>
+                    `الدواء: ${drug.drug} | التكرار: ${drug.frequency} | المدة: ${drug.period} | التوقيت: ${drug.timing}`
+                ).join(' || ');
+                patient.receipt = receiptString;
+            }
             
             // Update complaint and diagnosis if provided
             if (complaint !== undefined) {
@@ -215,12 +230,6 @@ const updatePatient = async (req, res) => {
                 patient.visits[visitIndex].diagnosis = diagnosis;
             }
         }
-
-        // Update receipt string for backward compatibility
-        const receiptString = drugs ? drugs.map(drug =>
-            `الدواء: ${drug.drug} | التكرار: ${drug.frequency} | المدة: ${drug.period} | التوقيت: ${drug.timing}`
-        ).join(' || ') : '';
-        patient.receipt = receiptString;
 
         await patient.save();
 
