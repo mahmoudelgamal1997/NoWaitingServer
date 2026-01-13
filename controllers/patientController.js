@@ -116,7 +116,7 @@ const savePatient = async (req, res) => {
     }
 };
 
-// Get patients for a specific doctor
+// Get patients for a specific doctor with optional filters, pagination, and search
 const getPatientsByDoctor = async (req, res) => {
     try {
         const { doctor_id } = req.params;
@@ -126,11 +126,135 @@ const getPatientsByDoctor = async (req, res) => {
             return res.status(400).json({ message: 'Doctor ID is required' });
         }
 
-        // Find patients belonging to this doctor
-        const patients = await Patient.find({ doctor_id });
-        res.json(patients);
+        // Extract query parameters
+        const {
+            page,
+            limit,
+            search,
+            startDate,
+            endDate,
+            status,
+            sortBy = 'date',
+            sortOrder = 'desc'
+        } = req.query;
+
+        // Build the query filter
+        const queryFilter = { doctor_id };
+
+        // Add status filter if provided
+        if (status) {
+            queryFilter.status = status;
+        }
+
+        // Add date range filter if provided
+        // Note: date is stored as string in format YYYY-MM-DD
+        if (startDate || endDate) {
+            queryFilter.date = {};
+            if (startDate) {
+                // Format startDate to YYYY-MM-DD if needed
+                const startDateStr = startDate.split('T')[0]; // Remove time if present
+                queryFilter.date.$gte = startDateStr;
+            }
+            if (endDate) {
+                // Format endDate to YYYY-MM-DD if needed
+                const endDateStr = endDate.split('T')[0]; // Remove time if present
+                queryFilter.date.$lte = endDateStr;
+            }
+        }
+
+        // Build search filter for patient name or phone
+        if (search) {
+            queryFilter.$or = [
+                { patient_name: { $regex: search, $options: 'i' } },
+                { patient_phone: { $regex: search, $options: 'i' } }
+            ];
+        }
+
+        // Build sort object
+        const sortObject = {};
+        if (sortBy === 'date') {
+            sortObject.date = sortOrder === 'asc' ? 1 : -1;
+        } else if (sortBy === 'name') {
+            sortObject.patient_name = sortOrder === 'asc' ? 1 : -1;
+        } else if (sortBy === 'createdAt') {
+            sortObject.createdAt = sortOrder === 'asc' ? 1 : -1;
+        } else {
+            // Default to date descending
+            sortObject.date = -1;
+        }
+
+        // Check if pagination is requested
+        const usePagination = page !== undefined || limit !== undefined;
+        
+        let patients;
+        let totalCount = 0;
+        let paginationInfo = null;
+
+        if (usePagination) {
+            // Parse pagination parameters
+            const pageNum = parseInt(page) || 1;
+            const limitNum = parseInt(limit) || 20;
+            const skip = (pageNum - 1) * limitNum;
+
+            // Get total count for pagination
+            totalCount = await Patient.countDocuments(queryFilter);
+
+            // Fetch paginated results
+            patients = await Patient.find(queryFilter)
+                .sort(sortObject)
+                .skip(skip)
+                .limit(limitNum);
+
+            // Calculate pagination metadata
+            const totalPages = Math.ceil(totalCount / limitNum);
+            paginationInfo = {
+                currentPage: pageNum,
+                totalPages: totalPages,
+                totalItems: totalCount,
+                itemsPerPage: limitNum,
+                hasNextPage: pageNum < totalPages,
+                hasPrevPage: pageNum > 1,
+                nextPage: pageNum < totalPages ? pageNum + 1 : null,
+                prevPage: pageNum > 1 ? pageNum - 1 : null
+            };
+        } else {
+            // Fetch all results without pagination
+            patients = await Patient.find(queryFilter).sort(sortObject);
+            totalCount = patients.length;
+        }
+
+        // Build response
+        const response = {
+            success: true,
+            message: 'Patients retrieved successfully',
+            data: patients,
+            totalItems: totalCount
+        };
+
+        // Add pagination info if pagination was used
+        if (paginationInfo) {
+            response.pagination = paginationInfo;
+        }
+
+        // Add applied filters info
+        response.filters = {
+            doctor_id,
+            search: search || null,
+            startDate: startDate || null,
+            endDate: endDate || null,
+            status: status || null,
+            sortBy,
+            sortOrder
+        };
+
+        res.json(response);
     } catch (error) {
-        res.status(500).json({ message: 'Error retrieving patients', error: error.message });
+        console.error('Error retrieving patients:', error);
+        res.status(500).json({ 
+            success: false,
+            message: 'Error retrieving patients', 
+            error: error.message 
+        });
     }
 };
 
