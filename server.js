@@ -5,6 +5,7 @@ const connectDB = require('./config/db');
 const patientRoutes = require('./routes/patientRoutes');
 const searchRoutes = require('./routes/searchRoutes');
 const doctorRoutes = require('./routes/doctorRoutes');
+const historyRoutes = require('./routes/historyRoutes');
 
 const cors = require('cors');
 
@@ -23,6 +24,7 @@ app.use(cors({
     'https://drwaiting-30f56.firebaseapp.com',
     'http://localhost:3000',  // Common React default port
     'http://localhost:3001',  // Your current frontend port
+    'http://localhost:3006',  // Frontend port
     'http://localhost:7000',  // Your backend port
     // true  // Allow dynamic origins (use cautiously)
   ],
@@ -46,6 +48,7 @@ app.use(bodyParser.json());
 app.use('/api', patientRoutes);
 app.use('/api', searchRoutes);
 app.use('/api', doctorRoutes);
+app.use('/api', historyRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

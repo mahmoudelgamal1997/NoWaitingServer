@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: patient-history-api
+    env: node
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false
+      - key: PORT
+        value: 6000
+
