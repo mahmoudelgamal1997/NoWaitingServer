@@ -1,0 +1,20 @@
+# Copy and paste these commands one by one after heroku login
+
+# 1. Create Heroku App (choose a unique name)
+heroku create patient-history-api-2024
+
+# 2. Set MongoDB URI (replace with your actual connection string)
+heroku config:set MONGO_URI="mongodb+srv://username:password@cluster.mongodb.net/patient-history?retryWrites=true&w=majority"
+
+# 3. Set Node Environment
+heroku config:set NODE_ENV=production
+
+# 4. Deploy
+git push heroku main
+
+# 5. Check logs
+heroku logs --tail
+
+# 6. Open your app
+heroku open
+
