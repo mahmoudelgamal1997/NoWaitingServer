@@ -186,8 +186,78 @@ const getPatientsByDoctor = async (req, res) => {
         // Check if pagination is requested
         const usePagination = page !== undefined || limit !== undefined;
         
+        // IMPORTANT: For proper merging by phone number, we need to fetch all patients first
+        // then merge, then paginate. This ensures accurate grouping.
+        // Fetch all matching patients first
+        let allPatients = await Patient.find(queryFilter).sort(sortObject);
+        
+        // Group patients by phone number and merge visits
+        // This ensures patients with same phone number are treated as one user
+        const patientsMap = new Map();
+        
+        allPatients.forEach(patient => {
+            const phoneKey = patient.patient_phone;
+            
+            if (patientsMap.has(phoneKey)) {
+                // Merge with existing patient record
+                const existingPatient = patientsMap.get(phoneKey);
+                
+                // Merge visits - combine all visits from both records
+                const allVisits = [...(existingPatient.visits || []), ...(patient.visits || [])];
+                
+                // Sort visits by date (newest first)
+                allVisits.sort((a, b) => {
+                    const dateA = new Date(a.date || a.time || 0);
+                    const dateB = new Date(b.date || b.time || 0);
+                    return dateB - dateA;
+                });
+                
+                // Update existing patient with merged data
+                // Keep the most recent patient info (name, age, address, etc.)
+                const existingDate = new Date(existingPatient.date || existingPatient.createdAt || 0);
+                const newDate = new Date(patient.date || patient.createdAt || 0);
+                
+                if (newDate > existingDate) {
+                    // Newer patient record - update info but keep merged visits
+                    existingPatient.patient_name = patient.patient_name || existingPatient.patient_name;
+                    existingPatient.age = patient.age || existingPatient.age;
+                    existingPatient.address = patient.address || existingPatient.address;
+                    existingPatient.fcmToken = patient.fcmToken || existingPatient.fcmToken;
+                    existingPatient.token = patient.token || existingPatient.token;
+                    existingPatient.status = patient.status || existingPatient.status;
+                    existingPatient.date = patient.date || existingPatient.date;
+                    existingPatient.time = patient.time || existingPatient.time;
+                }
+                
+                // Update visits with merged list
+                existingPatient.visits = allVisits;
+            } else {
+                // First occurrence of this phone number
+                patientsMap.set(phoneKey, patient.toObject ? patient.toObject() : JSON.parse(JSON.stringify(patient)));
+            }
+        });
+        
+        // Convert map back to array
+        let mergedPatients = Array.from(patientsMap.values());
+        
+        // Re-sort merged patients based on sortBy parameter
+        if (sortBy === 'date') {
+            mergedPatients.sort((a, b) => {
+                const dateA = new Date(a.date || a.createdAt || 0);
+                const dateB = new Date(b.date || b.createdAt || 0);
+                return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+            });
+        } else if (sortBy === 'name') {
+            mergedPatients.sort((a, b) => {
+                const nameA = (a.patient_name || '').toLowerCase();
+                const nameB = (b.patient_name || '').toLowerCase();
+                return sortOrder === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+            });
+        }
+        
+        // Now apply pagination to merged results
         let patients;
-        let totalCount = 0;
+        let totalCount = mergedPatients.length;
         let paginationInfo = null;
 
         if (usePagination) {
@@ -196,16 +266,10 @@ const getPatientsByDoctor = async (req, res) => {
             const limitNum = parseInt(limit) || 20;
             const skip = (pageNum - 1) * limitNum;
 
-            // Get total count for pagination
-            totalCount = await Patient.countDocuments(queryFilter);
+            // Apply pagination to merged patients
+            patients = mergedPatients.slice(skip, skip + limitNum);
 
-            // Fetch paginated results
-            patients = await Patient.find(queryFilter)
-                .sort(sortObject)
-                .skip(skip)
-                .limit(limitNum);
-
-            // Calculate pagination metadata
+            // Calculate pagination metadata based on merged count
             const totalPages = Math.ceil(totalCount / limitNum);
             paginationInfo = {
                 currentPage: pageNum,
@@ -218,9 +282,8 @@ const getPatientsByDoctor = async (req, res) => {
                 prevPage: pageNum > 1 ? pageNum - 1 : null
             };
         } else {
-            // Fetch all results without pagination
-            patients = await Patient.find(queryFilter).sort(sortObject);
-            totalCount = patients.length;
+            // Return all merged patients
+            patients = mergedPatients;
         }
 
         // Build response
