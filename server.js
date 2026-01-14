@@ -22,6 +22,7 @@ app.use(cors({
   origin: [
     'https://drwaiting-30f56.web.app',
     'https://drwaiting-30f56.firebaseapp.com',
+    'https://dashboard-web-app-c25d1324e042.herokuapp.com',  // Heroku frontend
     'http://localhost:3000',  // Common React default port
     'http://localhost:3001',  // Your current frontend port
     'http://localhost:3006',  // Frontend port
