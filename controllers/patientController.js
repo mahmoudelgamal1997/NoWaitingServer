@@ -192,17 +192,26 @@ const getPatientsByDoctor = async (req, res) => {
         let allPatients = await Patient.find(queryFilter).sort(sortObject);
         
         // Get today's date for filtering future visits
+        // Always use actual today, not the endDate parameter (which might be in the future)
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+        console.log('Filtering future visits - today is:', todayStr);
         
         // Helper function to filter out future visits
         const filterFutureVisits = (visits) => {
             if (!visits || !Array.isArray(visits)) return [];
-            return visits.filter(visit => {
+            const filtered = visits.filter(visit => {
                 if (!visit.date) return true; // Keep visits without date
                 try {
-                    const visitDate = new Date(visit.date);
+                    // Handle both Date objects and ISO strings
+                    let visitDate;
+                    if (visit.date instanceof Date) {
+                        visitDate = new Date(visit.date);
+                    } else {
+                        visitDate = new Date(visit.date);
+                    }
+                    
                     // Check if date is valid
                     if (isNaN(visitDate.getTime())) {
                         console.warn('Invalid visit date:', visit.date);
@@ -210,13 +219,19 @@ const getPatientsByDoctor = async (req, res) => {
                     }
                     visitDate.setHours(0, 0, 0, 0);
                     const visitDateStr = visitDate.toISOString().split('T')[0];
-                    // Only include visits up to today
-                    return visitDateStr <= todayStr;
+                    
+                    // Only include visits up to today (exclude future dates)
+                    const isFuture = visitDateStr > todayStr;
+                    if (isFuture) {
+                        console.log('Filtering out future visit:', visitDateStr, 'Today:', todayStr);
+                    }
+                    return !isFuture; // Return false for future dates (filter them out)
                 } catch (error) {
                     console.error('Error filtering visit date:', error, visit);
                     return true; // Keep visit if date parsing fails
                 }
             });
+            return filtered;
         };
         
         // Group patients by phone number and merge visits
