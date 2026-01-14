@@ -233,9 +233,14 @@ const getPatientsByDoctor = async (req, res) => {
                 // Merge with existing patient record
                 const existingPatient = patientsMap.get(phoneKey);
                 
+                // Ensure existingPatient.visits is an array
+                if (!existingPatient.visits || !Array.isArray(existingPatient.visits)) {
+                    existingPatient.visits = [];
+                }
+                
                 // Merge visits - combine all visits from both records (already filtered)
                 const existingFilteredVisits = filterFutureVisits(existingPatient.visits);
-                const allVisits = [...existingFilteredVisits, ...filteredVisits];
+                const allVisits = [...(existingFilteredVisits || []), ...(filteredVisits || [])];
                 
                 // Sort visits by date (newest first)
                 allVisits.sort((a, b) => {
@@ -265,9 +270,15 @@ const getPatientsByDoctor = async (req, res) => {
                 existingPatient.visits = allVisits;
             } else {
                 // First occurrence of this phone number
-                const patientObj = patient.toObject ? patient.toObject() : JSON.parse(JSON.stringify(patient));
+                // Convert Mongoose document to plain object if needed
+                let patientObj;
+                if (patient.toObject && typeof patient.toObject === 'function') {
+                    patientObj = patient.toObject();
+                } else {
+                    patientObj = JSON.parse(JSON.stringify(patient));
+                }
                 // Filter future visits before adding
-                patientObj.visits = filteredVisits;
+                patientObj.visits = filteredVisits || [];
                 patientsMap.set(phoneKey, patientObj);
             }
         });
