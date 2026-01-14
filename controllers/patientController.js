@@ -201,11 +201,21 @@ const getPatientsByDoctor = async (req, res) => {
             if (!visits || !Array.isArray(visits)) return [];
             return visits.filter(visit => {
                 if (!visit.date) return true; // Keep visits without date
-                const visitDate = new Date(visit.date);
-                visitDate.setHours(0, 0, 0, 0);
-                const visitDateStr = visitDate.toISOString().split('T')[0];
-                // Only include visits up to today
-                return visitDateStr <= todayStr;
+                try {
+                    const visitDate = new Date(visit.date);
+                    // Check if date is valid
+                    if (isNaN(visitDate.getTime())) {
+                        console.warn('Invalid visit date:', visit.date);
+                        return true; // Keep invalid dates for now
+                    }
+                    visitDate.setHours(0, 0, 0, 0);
+                    const visitDateStr = visitDate.toISOString().split('T')[0];
+                    // Only include visits up to today
+                    return visitDateStr <= todayStr;
+                } catch (error) {
+                    console.error('Error filtering visit date:', error, visit);
+                    return true; // Keep visit if date parsing fails
+                }
             });
         };
         
