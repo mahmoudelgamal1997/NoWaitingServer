@@ -13,13 +13,14 @@ RUN npm ci --only=production
 # Copy application files
 COPY . .
 
-# Expose port
-EXPOSE 6000
+# Expose port (Cloud Run uses PORT env var, typically 8080)
+EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:6000/api/history/summary', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+# Health check - use PORT env var or default to 8080
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node -e "const port = process.env.PORT || 8080; require('http').get('http://localhost:' + port + '/api/history/summary', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
 # Start the application
 CMD ["node", "server.js"]
+
 
