@@ -191,6 +191,24 @@ const getPatientsByDoctor = async (req, res) => {
         // Fetch all matching patients first
         let allPatients = await Patient.find(queryFilter).sort(sortObject);
         
+        // Get today's date for filtering future visits
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+        
+        // Helper function to filter out future visits
+        const filterFutureVisits = (visits) => {
+            if (!visits || !Array.isArray(visits)) return [];
+            return visits.filter(visit => {
+                if (!visit.date) return true; // Keep visits without date
+                const visitDate = new Date(visit.date);
+                visitDate.setHours(0, 0, 0, 0);
+                const visitDateStr = visitDate.toISOString().split('T')[0];
+                // Only include visits up to today
+                return visitDateStr <= todayStr;
+            });
+        };
+        
         // Group patients by phone number and merge visits
         // This ensures patients with same phone number are treated as one user
         const patientsMap = new Map();
@@ -198,12 +216,16 @@ const getPatientsByDoctor = async (req, res) => {
         allPatients.forEach(patient => {
             const phoneKey = patient.patient_phone;
             
+            // Filter future visits from this patient
+            const filteredVisits = filterFutureVisits(patient.visits);
+            
             if (patientsMap.has(phoneKey)) {
                 // Merge with existing patient record
                 const existingPatient = patientsMap.get(phoneKey);
                 
-                // Merge visits - combine all visits from both records
-                const allVisits = [...(existingPatient.visits || []), ...(patient.visits || [])];
+                // Merge visits - combine all visits from both records (already filtered)
+                const existingFilteredVisits = filterFutureVisits(existingPatient.visits);
+                const allVisits = [...existingFilteredVisits, ...filteredVisits];
                 
                 // Sort visits by date (newest first)
                 allVisits.sort((a, b) => {
@@ -233,7 +255,10 @@ const getPatientsByDoctor = async (req, res) => {
                 existingPatient.visits = allVisits;
             } else {
                 // First occurrence of this phone number
-                patientsMap.set(phoneKey, patient.toObject ? patient.toObject() : JSON.parse(JSON.stringify(patient)));
+                const patientObj = patient.toObject ? patient.toObject() : JSON.parse(JSON.stringify(patient));
+                // Filter future visits before adding
+                patientObj.visits = filteredVisits;
+                patientsMap.set(phoneKey, patientObj);
             }
         });
         
