@@ -6,6 +6,7 @@ const patientRoutes = require('./routes/patientRoutes');
 const searchRoutes = require('./routes/searchRoutes');
 const doctorRoutes = require('./routes/doctorRoutes');
 const historyRoutes = require('./routes/historyRoutes');
+const mobileUserRoutes = require('./routes/mobileUserRoutes');
 
 const cors = require('cors');
 
@@ -72,6 +73,7 @@ app.use('/api', patientRoutes);
 app.use('/api', searchRoutes);
 app.use('/api', doctorRoutes);
 app.use('/api', historyRoutes);
+app.use('/api', mobileUserRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
