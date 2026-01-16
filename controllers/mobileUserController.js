@@ -516,10 +516,198 @@ const getPatientVisitDates = async (req, res) => {
     }
 };
 
+/**
+ * Get all patient data in one response: profile, visits, and receipts
+ * Returns comprehensive patient information with all visits and receipts
+ */
+const getPatientAllData = async (req, res) => {
+    try {
+        const { patient_id, phone } = req.query;
+        const {
+            startDate,
+            endDate,
+            doctor_id,
+            visit_type,
+            includeReceipts = true
+        } = req.query;
+
+        // Validate input
+        if (!patient_id && !phone) {
+            return res.status(400).json({
+                success: false,
+                message: 'Either patient_id or phone is required'
+            });
+        }
+
+        // Build query
+        let query = {};
+        if (patient_id) {
+            query.patient_id = patient_id;
+        } else if (phone) {
+            query.patient_phone = phone;
+        }
+
+        // Filter by doctor if specified
+        if (doctor_id) {
+            query.doctor_id = doctor_id;
+        }
+
+        // Find all patient records
+        const patientRecords = await Patient.find(query).lean();
+
+        if (!patientRecords || patientRecords.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Patient not found'
+            });
+        }
+
+        // Aggregate profile data
+        let aggregatedProfile = {
+            patient_id: patientRecords[0].patient_id,
+            patient_name: patientRecords[0].patient_name,
+            patient_phone: patientRecords[0].patient_phone,
+            age: patientRecords[0].age || '',
+            address: patientRecords[0].address || '',
+            fcmToken: patientRecords[0].fcmToken || '',
+            doctors: [],
+            total_visits: 0,
+            total_receipts: 0,
+            created_at: patientRecords[0].createdAt,
+            last_visit_date: null
+        };
+
+        // Collect all visits and receipts
+        const allVisits = [];
+        const allReceipts = [];
+        const doctorsMap = new Map();
+
+        patientRecords.forEach(record => {
+            // Track unique doctors
+            if (!doctorsMap.has(record.doctor_id)) {
+                doctorsMap.set(record.doctor_id, {
+                    doctor_id: record.doctor_id,
+                    doctor_name: record.doctor_name || ''
+                });
+            }
+
+            // Collect visits and receipts
+            if (record.visits && record.visits.length > 0) {
+                record.visits.forEach(visit => {
+                    // Apply date filters
+                    if (startDate && new Date(visit.date) < new Date(startDate)) {
+                        return;
+                    }
+                    if (endDate && new Date(visit.date) > new Date(endDate)) {
+                        return;
+                    }
+                    // Apply visit type filter
+                    if (visit_type && visit.visit_type !== visit_type) {
+                        return;
+                    }
+
+                    const visitData = {
+                        visit_id: visit.visit_id,
+                        date: visit.date,
+                        time: visit.time,
+                        visit_type: visit.visit_type || '',
+                        complaint: visit.complaint || '',
+                        diagnosis: visit.diagnosis || '',
+                        receipts: includeReceipts ? (visit.receipts || []) : [],
+                        receipts_count: (visit.receipts || []).length,
+                        doctor_id: record.doctor_id,
+                        doctor_name: record.doctor_name || ''
+                    };
+
+                    allVisits.push(visitData);
+
+                    // Collect receipts from this visit
+                    if (includeReceipts && visit.receipts && visit.receipts.length > 0) {
+                        visit.receipts.forEach(receipt => {
+                            allReceipts.push({
+                                receipt_id: receipt._id ? receipt._id.toString() : null,
+                                visit_id: visit.visit_id,
+                                visit_date: visit.date,
+                                visit_time: visit.time,
+                                visit_type: visit.visit_type || '',
+                                complaint: visit.complaint || '',
+                                diagnosis: visit.diagnosis || '',
+                                drugs: receipt.drugs || [],
+                                notes: receipt.notes || '',
+                                date: receipt.date || visit.date,
+                                drugModel: receipt.drugModel || 'new',
+                                doctor_id: record.doctor_id,
+                                doctor_name: record.doctor_name || ''
+                            });
+                        });
+                    }
+                });
+            }
+
+            // Update profile info from most recent record
+            const recordDate = new Date(record.updatedAt || record.createdAt);
+            const currentDate = new Date(aggregatedProfile.created_at || 0);
+            if (recordDate > currentDate) {
+                if (record.age) aggregatedProfile.age = record.age;
+                if (record.address) aggregatedProfile.address = record.address;
+                if (record.fcmToken) aggregatedProfile.fcmToken = record.fcmToken;
+                aggregatedProfile.created_at = record.createdAt;
+            }
+        });
+
+        // Sort visits by date (most recent first)
+        allVisits.sort((a, b) => {
+            const dateA = new Date(a.date || 0);
+            const dateB = new Date(b.date || 0);
+            return dateB.getTime() - dateA.getTime();
+        });
+
+        // Sort receipts by date (most recent first)
+        allReceipts.sort((a, b) => {
+            const dateA = new Date(a.date || 0);
+            const dateB = new Date(b.date || 0);
+            return dateB.getTime() - dateA.getTime();
+        });
+
+        // Update profile stats
+        aggregatedProfile.doctors = Array.from(doctorsMap.values());
+        aggregatedProfile.total_visits = allVisits.length;
+        aggregatedProfile.total_receipts = allReceipts.length;
+        aggregatedProfile.last_visit_date = allVisits.length > 0 ? allVisits[0].date : null;
+
+        res.status(200).json({
+            success: true,
+            message: 'All patient data retrieved successfully',
+            data: {
+                profile: aggregatedProfile,
+                visits: allVisits,
+                receipts: allReceipts
+            },
+            filters: {
+                patient_id: patient_id || null,
+                phone: phone || null,
+                startDate: startDate || null,
+                endDate: endDate || null,
+                doctor_id: doctor_id || null,
+                visit_type: visit_type || null,
+                includeReceipts: includeReceipts === 'true' || includeReceipts === true
+            }
+        });
+    } catch (error) {
+        console.error('Error retrieving all patient data:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error retrieving all patient data',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getPatientProfile,
     getPatientVisits,
     getPatientReceipts,
-    getPatientVisitDates
+    getPatientVisitDates,
+    getPatientAllData
 };
 

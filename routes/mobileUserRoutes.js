@@ -4,7 +4,8 @@ const {
     getPatientProfile,
     getPatientVisits,
     getPatientReceipts,
-    getPatientVisitDates
+    getPatientVisitDates,
+    getPatientAllData
 } = require('../controllers/mobileUserController');
 
 // Middleware to verify authentication - implement your actual auth middleware
@@ -28,6 +29,9 @@ router.get('/mobile/receipts', authenticateUser, getPatientReceipts);
 
 // GET /api/mobile/visit-dates - Get patient visit dates
 router.get('/mobile/visit-dates', authenticateUser, getPatientVisitDates);
+
+// GET /api/mobile/all-data - Get all patient data (profile, visits, receipts) in one response
+router.get('/mobile/all-data', authenticateUser, getPatientAllData);
 
 module.exports = router;
 
