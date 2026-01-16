@@ -1,4 +1,5 @@
 const Patient = require('../models/patient');
+const Doctor = require('../models/doctor');
 const { v4: uuidv4 } = require('uuid');
 
 // Save patient data or add a new visit if patient already exists
@@ -27,6 +28,20 @@ const savePatient = async (req, res) => {
         // Validation for required doctor_id
         if (!doctor_id) {
             return res.status(400).json({ message: 'Doctor ID is required' });
+        }
+
+        // If doctor_name is not provided, try to fetch it from Doctor collection
+        let resolvedDoctorName = doctor_name;
+        if (!resolvedDoctorName) {
+            try {
+                const doctor = await Doctor.findOne({ doctor_id });
+                if (doctor && doctor.name) {
+                    resolvedDoctorName = doctor.name;
+                }
+            } catch (error) {
+                console.warn('Could not fetch doctor name:', error.message);
+                // Continue with empty doctor_name if lookup fails
+            }
         }
 
         // Check if patient with same phone number and doctor_id already exists
@@ -63,6 +78,10 @@ const savePatient = async (req, res) => {
             if (address) existingPatient.address = address;
             if (fcmToken) existingPatient.fcmToken = fcmToken;
             if (token) existingPatient.token = token;
+            // Update doctor_name if we resolved it or if it was provided
+            if (resolvedDoctorName) {
+                existingPatient.doctor_name = resolvedDoctorName;
+            }
 
             await existingPatient.save();
 
@@ -79,7 +98,7 @@ const savePatient = async (req, res) => {
             patient_phone,
             patient_id: patient_id || uuidv4(), // Generate patient_id if not provided
             doctor_id,
-            doctor_name,
+            doctor_name: resolvedDoctorName || doctor_name || '',
             date,
             time,
             status,
