@@ -210,15 +210,20 @@ const getPatientsByDoctor = async (req, res) => {
         // Fetch all matching patients first
         let allPatients = await Patient.find(queryFilter).sort(sortObject);
         
-        // Get today's date for filtering future visits
-        // Always use actual today, not the endDate parameter (which might be in the future)
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD format
-        console.log('Filtering future visits - today is:', todayStr);
+        // Determine the max date for filtering visits
+        // If endDate is provided, use it; otherwise use today
+        let maxDateForVisits;
+        if (endDate) {
+            maxDateForVisits = new Date(endDate);
+            maxDateForVisits.setHours(23, 59, 59, 999); // Include the full end date
+        } else {
+            maxDateForVisits = new Date();
+            maxDateForVisits.setHours(23, 59, 59, 999); // Include today
+        }
+        const maxDateStr = maxDateForVisits.toISOString().split('T')[0]; // YYYY-MM-DD format
         
-        // Helper function to filter out future visits
-        const filterFutureVisits = (visits) => {
+        // Helper function to filter visits based on date range
+        const filterVisitsByDate = (visits, maxDate = maxDateStr) => {
             if (!visits || !Array.isArray(visits)) return [];
             const filtered = visits.filter(visit => {
                 if (!visit.date) return true; // Keep visits without date
@@ -239,12 +244,20 @@ const getPatientsByDoctor = async (req, res) => {
                     visitDate.setHours(0, 0, 0, 0);
                     const visitDateStr = visitDate.toISOString().split('T')[0];
                     
-                    // Only include visits up to today (exclude future dates)
-                    const isFuture = visitDateStr > todayStr;
-                    if (isFuture) {
-                        console.log('Filtering out future visit:', visitDateStr, 'Today:', todayStr);
+                    // Apply startDate filter if provided
+                    if (startDate) {
+                        const startDateStr = startDate.split('T')[0];
+                        if (visitDateStr < startDateStr) {
+                            return false; // Filter out visits before startDate
+                        }
                     }
-                    return !isFuture; // Return false for future dates (filter them out)
+                    
+                    // Only include visits up to maxDate (endDate if provided, or today)
+                    const isFuture = visitDateStr > maxDate;
+                    if (isFuture) {
+                        return false; // Filter out future dates beyond maxDate
+                    }
+                    return true;
                 } catch (error) {
                     console.error('Error filtering visit date:', error, visit);
                     return true; // Keep visit if date parsing fails
@@ -260,8 +273,8 @@ const getPatientsByDoctor = async (req, res) => {
         allPatients.forEach(patient => {
             const phoneKey = patient.patient_phone;
             
-            // Filter future visits from this patient
-            const filteredVisits = filterFutureVisits(patient.visits);
+            // Filter visits based on date range
+            const filteredVisits = filterVisitsByDate(patient.visits || []);
             
             if (patientsMap.has(phoneKey)) {
                 // Merge with existing patient record
@@ -273,7 +286,7 @@ const getPatientsByDoctor = async (req, res) => {
                 }
                 
                 // Merge visits - combine all visits from both records (already filtered)
-                const existingFilteredVisits = filterFutureVisits(existingPatient.visits);
+                const existingFilteredVisits = filterVisitsByDate(existingPatient.visits || []);
                 const allVisits = [...(existingFilteredVisits || []), ...(filteredVisits || [])];
                 
                 // Sort visits by date (newest first)
@@ -311,7 +324,7 @@ const getPatientsByDoctor = async (req, res) => {
                 } else {
                     patientObj = JSON.parse(JSON.stringify(patient));
                 }
-                // Filter future visits before adding
+                // Ensure visits array is always present, even if empty
                 patientObj.visits = filteredVisits || [];
                 patientsMap.set(phoneKey, patientObj);
             }
