@@ -425,74 +425,105 @@ const getPatientsByDoctor = async (req, res) => {
 };
 
 // Get all patients with optional filters: doctor_id, clinic_id, assistant_id
+// Supports pagination and sorting like mobile API
 // All filters are optional and can be used in any combination
-// Example: GET /api/patients?doctor_id=123&clinic_id=456
+// Example: GET /api/patients?doctor_id=123&clinic_id=456&page=1&limit=20&sortBy=created_at&sortOrder=desc
 // Example: GET /api/patients?doctor_id=123
 // Example: GET /api/patients?clinic_id=456&assistant_id=789
 // Example: GET /api/patients (returns all patients)
 const getAllPatients = async (req, res) => {
     try {
-        const { doctor_id, clinic_id, assistant_id } = req.query;
+        const { 
+            doctor_id, 
+            clinic_id, 
+            assistant_id,
+            page,
+            limit,
+            sortBy = 'createdAt',
+            sortOrder = 'desc'
+        } = req.query;
         
-        // Build filter object - only include filters that are provided
+        // Build filter object - only include filters that are provided (strict matching)
         const filter = {};
         
         if (doctor_id) {
             filter.doctor_id = doctor_id;
         }
         
-        // Handle clinic_id filter
-        // If clinic_id is provided, match records with that clinic_id OR empty clinic_id (legacy records)
-        // This allows filtering while still showing legacy records that don't have clinic_id set
+        // Strict filtering - only match exact clinic_id (no empty values)
         if (clinic_id) {
-            filter.$or = [
-                { clinic_id: clinic_id },
-                { clinic_id: "" },
-                { clinic_id: { $exists: false } }
-            ];
+            filter.clinic_id = clinic_id;
         }
         
-        // Handle assistant_id filter
-        // If assistant_id is provided, match records with that assistant_id OR empty assistant_id (legacy records)
+        // Strict filtering - only match exact assistant_id (no empty values)
         if (assistant_id) {
-            if (filter.$or) {
-                // If we already have $or for clinic_id, we need to combine both conditions with $and
-                // Match: (clinic_id matches OR empty) AND (assistant_id matches OR empty)
-                const clinicCondition = { $or: filter.$or };
-                delete filter.$or;
-                filter.$and = [
-                    clinicCondition,
-                    {
-                        $or: [
-                            { assistant_id: assistant_id },
-                            { assistant_id: "" },
-                            { assistant_id: { $exists: false } }
-                        ]
-                    }
-                ];
-            } else {
-                filter.$or = [
-                    { assistant_id: assistant_id },
-                    { assistant_id: "" },
-                    { assistant_id: { $exists: false } }
-                ];
-            }
+            filter.assistant_id = assistant_id;
         }
         
-        // Find patients with the applied filters, sorted by most recent first
-        // Sort by updatedAt descending (most recent first), then by createdAt descending
-        const patients = await Patient.find(filter)
-            .sort({ updatedAt: -1, createdAt: -1 });
+        // Build sort object based on sortBy parameter
+        const sortObject = {};
+        if (sortBy === 'created_at' || sortBy === 'createdAt') {
+            sortObject.createdAt = sortOrder === 'asc' ? 1 : -1;
+        } else if (sortBy === 'updated_at' || sortBy === 'updatedAt') {
+            sortObject.updatedAt = sortOrder === 'asc' ? 1 : -1;
+        } else if (sortBy === 'date') {
+            // For date field, sort by date string or createdAt as fallback
+            sortObject.date = sortOrder === 'asc' ? 1 : -1;
+            sortObject.createdAt = sortOrder === 'asc' ? 1 : -1;
+        } else {
+            // Default to createdAt descending
+            sortObject.createdAt = -1;
+        }
+        
+        // Handle pagination
+        let patients;
+        let totalCount;
+        let paginationInfo = null;
+        
+        if (page !== undefined || limit !== undefined) {
+            const pageNum = parseInt(page) || 1;
+            const limitNum = parseInt(limit) || 20;
+            const skip = (pageNum - 1) * limitNum;
+            
+            // Get total count for pagination
+            totalCount = await Patient.countDocuments(filter);
+            
+            // Fetch paginated results
+            patients = await Patient.find(filter)
+                .sort(sortObject)
+                .skip(skip)
+                .limit(limitNum);
+            
+            // Build pagination info
+            const totalPages = Math.ceil(totalCount / limitNum);
+            paginationInfo = {
+                currentPage: pageNum,
+                totalPages: totalPages,
+                totalItems: totalCount,
+                itemsPerPage: limitNum,
+                hasNextPage: pageNum < totalPages,
+                hasPrevPage: pageNum > 1,
+                nextPage: pageNum < totalPages ? pageNum + 1 : null,
+                prevPage: pageNum > 1 ? pageNum - 1 : null
+            };
+        } else {
+            // No pagination - return all matching records
+            patients = await Patient.find(filter).sort(sortObject);
+            totalCount = patients.length;
+        }
         
         res.status(200).json({
             success: true,
             message: 'Patients retrieved successfully',
             data: patients,
-            totalItems: patients.length,
+            totalItems: totalCount,
+            pagination: paginationInfo,
             filters: {
                 doctor_id: doctor_id || null,
                 clinic_id: clinic_id || null,
-                assistant_id: assistant_id || null
+                assistant_id: assistant_id || null,
+                sortBy: sortBy || 'createdAt',
+                sortOrder: sortOrder || 'desc'
             }
         });
     } catch (error) {
