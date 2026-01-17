@@ -449,8 +449,10 @@ const getAllPatients = async (req, res) => {
             filter.assistant_id = assistant_id;
         }
         
-        // Find patients with the applied filters
-        const patients = await Patient.find(filter);
+        // Find patients with the applied filters, sorted by most recent first
+        // Sort by updatedAt descending (most recent first), then by createdAt descending
+        const patients = await Patient.find(filter)
+            .sort({ updatedAt: -1, createdAt: -1 });
         
         res.status(200).json({
             success: true,
