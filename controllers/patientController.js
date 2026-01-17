@@ -21,7 +21,13 @@ const savePatient = async (req, res) => {
             address,
             visit_type,
             complaint = "", // Added for initial visit
-            diagnosis = ""  // Added for initial visit
+            diagnosis = "",  // Added for initial visit
+            all_visits = [],
+            user_order_in_queue,
+            total_visits = 0,
+            user_uid = "",
+            visit_speed = "",
+            clinic_id = ""
         } = req.body;
 
         
@@ -78,6 +84,13 @@ const savePatient = async (req, res) => {
             if (address) existingPatient.address = address;
             if (fcmToken) existingPatient.fcmToken = fcmToken;
             if (token) existingPatient.token = token;
+            // Update new fields if provided
+            if (user_order_in_queue !== undefined) existingPatient.user_order_in_queue = user_order_in_queue;
+            if (total_visits !== undefined) existingPatient.total_visits = total_visits;
+            if (user_uid !== undefined) existingPatient.user_uid = user_uid;
+            if (visit_speed !== undefined) existingPatient.visit_speed = visit_speed;
+            if (clinic_id !== undefined) existingPatient.clinic_id = clinic_id;
+            if (all_visits !== undefined && Array.isArray(all_visits)) existingPatient.all_visits = all_visits;
             // Update doctor_name if we resolved it or if it was provided
             if (resolvedDoctorName) {
                 existingPatient.doctor_name = resolvedDoctorName;
@@ -108,6 +121,12 @@ const savePatient = async (req, res) => {
             age,
             address,
             visit_type,
+            all_visits: all_visits || [],
+            user_order_in_queue: user_order_in_queue || 0,
+            total_visits: total_visits || 0,
+            user_uid: user_uid || "",
+            visit_speed: visit_speed || "",
+            clinic_id: clinic_id || "",
             visits: [{
                 visit_id: uuidv4(),
                 date: date || new Date(),

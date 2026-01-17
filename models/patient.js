@@ -126,6 +126,30 @@ const patientSchema = new mongoose.Schema({
     visits: {
         type: [visitSchema],
         default: []
+    },
+    all_visits: {
+        type: [visitSchema],
+        default: []
+    },
+    user_order_in_queue: {
+        type: Number,
+        default: 0
+    },
+    total_visits: {
+        type: Number,
+        default: 0
+    },
+    user_uid: {
+        type: String,
+        default: ""
+    },
+    visit_speed: {
+        type: String,
+        default: ""
+    },
+    clinic_id: {
+        type: String,
+        default: ""
     }
 }, { 
     timestamps: true 
