@@ -464,6 +464,7 @@ const getAllPatients = async (req, res) => {
         // Match mobile API behavior: use createdAt/updatedAt (Date fields) for proper sorting
         // The 'date' field is a string and doesn't sort correctly, so use createdAt instead
         const sortObject = {};
+        console.log('Sort parameters:', { sortBy, sortOrder });
         if (sortBy === 'created_at' || sortBy === 'createdAt' || sortBy === 'date') {
             // For 'date' sortBy, use createdAt (Date field) instead of date string field
             // This matches mobile API behavior and ensures proper chronological sorting
@@ -474,6 +475,8 @@ const getAllPatients = async (req, res) => {
             // Default to createdAt descending (newest first) - matches mobile API
             sortObject.createdAt = -1;
         }
+        console.log('Sort object:', sortObject);
+        console.log('Filter object:', filter);
         
         // Handle pagination
         let patients;
