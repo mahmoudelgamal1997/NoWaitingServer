@@ -165,21 +165,9 @@ const getPatientsByDoctor = async (req, res) => {
             queryFilter.status = status;
         }
 
-        // Add date range filter if provided
-        // Note: date is stored as string in format YYYY-MM-DD
-        if (startDate || endDate) {
-            queryFilter.date = {};
-            if (startDate) {
-                // Format startDate to YYYY-MM-DD if needed
-                const startDateStr = startDate.split('T')[0]; // Remove time if present
-                queryFilter.date.$gte = startDateStr;
-            }
-            if (endDate) {
-                // Format endDate to YYYY-MM-DD if needed
-                const endDateStr = endDate.split('T')[0]; // Remove time if present
-                queryFilter.date.$lte = endDateStr;
-            }
-        }
+        // Note: startDate/endDate are now only used to filter visits, not patients
+        // Patients should be returned regardless of their date field if they match doctor_id
+        // Date filtering on patient records is deprecated - use visit date filtering instead
 
         // Build search filter for patient name or phone
         if (search) {
