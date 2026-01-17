@@ -461,17 +461,17 @@ const getAllPatients = async (req, res) => {
         }
         
         // Build sort object based on sortBy parameter
+        // Match mobile API behavior: use createdAt/updatedAt (Date fields) for proper sorting
+        // The 'date' field is a string and doesn't sort correctly, so use createdAt instead
         const sortObject = {};
-        if (sortBy === 'created_at' || sortBy === 'createdAt') {
+        if (sortBy === 'created_at' || sortBy === 'createdAt' || sortBy === 'date') {
+            // For 'date' sortBy, use createdAt (Date field) instead of date string field
+            // This matches mobile API behavior and ensures proper chronological sorting
             sortObject.createdAt = sortOrder === 'asc' ? 1 : -1;
         } else if (sortBy === 'updated_at' || sortBy === 'updatedAt') {
             sortObject.updatedAt = sortOrder === 'asc' ? 1 : -1;
-        } else if (sortBy === 'date') {
-            // For date field, sort by date string or createdAt as fallback
-            sortObject.date = sortOrder === 'asc' ? 1 : -1;
-            sortObject.createdAt = sortOrder === 'asc' ? 1 : -1;
         } else {
-            // Default to createdAt descending
+            // Default to createdAt descending (newest first) - matches mobile API
             sortObject.createdAt = -1;
         }
         
