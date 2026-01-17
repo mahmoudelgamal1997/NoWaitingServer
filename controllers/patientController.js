@@ -27,7 +27,8 @@ const savePatient = async (req, res) => {
             total_visits = 0,
             user_uid = "",
             visit_speed = "",
-            clinic_id = ""
+            clinic_id = "",
+            assistant_id = ""
         } = req.body;
 
         
@@ -90,6 +91,7 @@ const savePatient = async (req, res) => {
             if (user_uid !== undefined) existingPatient.user_uid = user_uid;
             if (visit_speed !== undefined) existingPatient.visit_speed = visit_speed;
             if (clinic_id !== undefined) existingPatient.clinic_id = clinic_id;
+            if (assistant_id !== undefined) existingPatient.assistant_id = assistant_id;
             if (all_visits !== undefined && Array.isArray(all_visits)) existingPatient.all_visits = all_visits;
             // Update doctor_name if we resolved it or if it was provided
             if (resolvedDoctorName) {
@@ -127,6 +129,7 @@ const savePatient = async (req, res) => {
             user_uid: user_uid || "",
             visit_speed: visit_speed || "",
             clinic_id: clinic_id || "",
+            assistant_id: assistant_id || "",
             visits: [{
                 visit_id: uuidv4(),
                 date: date || new Date(),
@@ -421,14 +424,52 @@ const getPatientsByDoctor = async (req, res) => {
     }
 };
 
-// Get all patients (admin only route)
+// Get all patients with optional filters: doctor_id, clinic_id, assistant_id
+// All filters are optional and can be used in any combination
+// Example: GET /api/patients?doctor_id=123&clinic_id=456
+// Example: GET /api/patients?doctor_id=123
+// Example: GET /api/patients?clinic_id=456&assistant_id=789
+// Example: GET /api/patients (returns all patients)
 const getAllPatients = async (req, res) => {
     try {
-        // This could be protected with admin middleware
-        const patients = await Patient.find();
-        res.json(patients);
+        const { doctor_id, clinic_id, assistant_id } = req.query;
+        
+        // Build filter object - only include filters that are provided
+        const filter = {};
+        
+        if (doctor_id) {
+            filter.doctor_id = doctor_id;
+        }
+        
+        if (clinic_id) {
+            filter.clinic_id = clinic_id;
+        }
+        
+        if (assistant_id) {
+            filter.assistant_id = assistant_id;
+        }
+        
+        // Find patients with the applied filters
+        const patients = await Patient.find(filter);
+        
+        res.status(200).json({
+            success: true,
+            message: 'Patients retrieved successfully',
+            data: patients,
+            totalItems: patients.length,
+            filters: {
+                doctor_id: doctor_id || null,
+                clinic_id: clinic_id || null,
+                assistant_id: assistant_id || null
+            }
+        });
     } catch (error) {
-        res.status(500).json({ message: 'Error retrieving patients', error: error.message });
+        console.error('Error retrieving patients:', error);
+        res.status(500).json({ 
+            success: false,
+            message: 'Error retrieving patients', 
+            error: error.message 
+        });
     }
 };
 

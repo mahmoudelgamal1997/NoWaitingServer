@@ -150,6 +150,10 @@ const patientSchema = new mongoose.Schema({
     clinic_id: {
         type: String,
         default: ""
+    },
+    assistant_id: {
+        type: String,
+        default: ""
     }
 }, { 
     timestamps: true 
