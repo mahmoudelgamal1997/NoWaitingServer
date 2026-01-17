@@ -441,12 +441,42 @@ const getAllPatients = async (req, res) => {
             filter.doctor_id = doctor_id;
         }
         
+        // Handle clinic_id filter
+        // If clinic_id is provided, match records with that clinic_id OR empty clinic_id (legacy records)
+        // This allows filtering while still showing legacy records that don't have clinic_id set
         if (clinic_id) {
-            filter.clinic_id = clinic_id;
+            filter.$or = [
+                { clinic_id: clinic_id },
+                { clinic_id: "" },
+                { clinic_id: { $exists: false } }
+            ];
         }
         
+        // Handle assistant_id filter
+        // If assistant_id is provided, match records with that assistant_id OR empty assistant_id (legacy records)
         if (assistant_id) {
-            filter.assistant_id = assistant_id;
+            if (filter.$or) {
+                // If we already have $or for clinic_id, we need to combine both conditions with $and
+                // Match: (clinic_id matches OR empty) AND (assistant_id matches OR empty)
+                const clinicCondition = { $or: filter.$or };
+                delete filter.$or;
+                filter.$and = [
+                    clinicCondition,
+                    {
+                        $or: [
+                            { assistant_id: assistant_id },
+                            { assistant_id: "" },
+                            { assistant_id: { $exists: false } }
+                        ]
+                    }
+                ];
+            } else {
+                filter.$or = [
+                    { assistant_id: assistant_id },
+                    { assistant_id: "" },
+                    { assistant_id: { $exists: false } }
+                ];
+            }
         }
         
         // Find patients with the applied filters, sorted by most recent first
