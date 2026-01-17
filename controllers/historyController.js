@@ -23,13 +23,20 @@ const getAllHistory = async (req, res) => {
         const limitNum = parseInt(limit);
         const skip = (pageNum - 1) * limitNum;
 
+        // SECURITY: Require doctor_id to prevent returning all patients
+        if (!doctor_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'doctor_id parameter is required for security reasons',
+                error: 'Missing doctor_id parameter'
+            });
+        }
+
         // Build query
         let query = {};
 
-        // Filter by doctor_id if provided
-        if (doctor_id) {
-            query.doctor_id = doctor_id;
-        }
+        // Filter by doctor_id (required)
+        query.doctor_id = doctor_id;
 
         // Filter by date range if provided
         if (startDate || endDate) {
@@ -165,10 +172,17 @@ const getHistorySummary = async (req, res) => {
     try {
         const { doctor_id, startDate, endDate } = req.query;
 
-        let query = {};
-        if (doctor_id) {
-            query.doctor_id = doctor_id;
+        // SECURITY: Require doctor_id to prevent returning all patients
+        if (!doctor_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'doctor_id parameter is required for security reasons',
+                error: 'Missing doctor_id parameter'
+            });
         }
+
+        let query = {};
+        query.doctor_id = doctor_id;
 
         // Get all patients matching the query
         const patients = await Patient.find(query).lean();
@@ -258,11 +272,18 @@ const getAllVisits = async (req, res) => {
         const limitNum = parseInt(limit);
         const skip = (pageNum - 1) * limitNum;
 
+        // SECURITY: Require doctor_id to prevent returning all patients
+        if (!doctor_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'doctor_id parameter is required for security reasons',
+                error: 'Missing doctor_id parameter'
+            });
+        }
+
         // Build query
         let query = {};
-        if (doctor_id) {
-            query.doctor_id = doctor_id;
-        }
+        query.doctor_id = doctor_id;
         if (search) {
             query.$or = [
                 { patient_name: { $regex: search, $options: 'i' } },
