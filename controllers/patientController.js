@@ -437,6 +437,8 @@ const getAllPatients = async (req, res) => {
             doctor_id, 
             clinic_id, 
             assistant_id,
+            startDate,
+            endDate,
             page,
             limit,
             sortBy = 'createdAt',
@@ -458,6 +460,23 @@ const getAllPatients = async (req, res) => {
         // Strict filtering - only match exact assistant_id (no empty values)
         if (assistant_id) {
             filter.assistant_id = assistant_id;
+        }
+        
+        // Add date filtering - filter by createdAt (Date field) for reliable date comparison
+        if (startDate || endDate) {
+            filter.createdAt = {};
+            
+            if (startDate) {
+                const start = new Date(startDate);
+                start.setHours(0, 0, 0, 0);
+                filter.createdAt.$gte = start;
+            }
+            
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                filter.createdAt.$lte = end;
+            }
         }
         
         // Build sort object based on sortBy parameter
@@ -525,6 +544,8 @@ const getAllPatients = async (req, res) => {
                 doctor_id: doctor_id || null,
                 clinic_id: clinic_id || null,
                 assistant_id: assistant_id || null,
+                startDate: startDate || null,
+                endDate: endDate || null,
                 sortBy: sortBy || 'createdAt',
                 sortOrder: sortOrder || 'desc'
             }
