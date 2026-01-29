@@ -32,7 +32,7 @@ const uploadPatientReport = async (req, res) => {
         const description = req.body.description || '';
         const uploaded_by = req.body.uploaded_by || '';
 
-        // Validate required fields
+        // Validate required fields - only phone is required for patient self-uploads
         if (!patient_id && !patient_phone) {
             return res.status(400).json({
                 success: false,
@@ -40,12 +40,7 @@ const uploadPatientReport = async (req, res) => {
             });
         }
 
-        if (!doctor_id) {
-            return res.status(400).json({
-                success: false,
-                message: 'doctor_id is required'
-            });
-        }
+        // doctor_id is optional - patient can upload without specifying a doctor
 
         // Get files from request (multer handles this)
         const files = req.files || (req.file ? [req.file] : []);
@@ -73,23 +68,40 @@ const uploadPatientReport = async (req, res) => {
 
         // Find patient by phone or ID
         console.log('Searching for patient:', { doctor_id, patient_id, patient_phone });
-        let patient = await Patient.findOne({
-            doctor_id,
-            $or: [
-                { patient_id: patient_id || '' },
-                { patient_phone: patient_phone || '' }
-            ]
-        });
+        
+        let patient;
+        
+        if (doctor_id) {
+            // If doctor_id provided, find patient under that specific doctor
+            patient = await Patient.findOne({
+                doctor_id,
+                $or: [
+                    { patient_id: patient_id || '' },
+                    { patient_phone: patient_phone || '' }
+                ]
+            });
+        } else {
+            // If no doctor_id (patient self-upload), find ANY patient record with this phone/id
+            // This allows patients to upload reports without specifying a doctor
+            patient = await Patient.findOne({
+                $or: [
+                    { patient_id: patient_id || '' },
+                    { patient_phone: patient_phone || '' }
+                ]
+            }).sort({ updatedAt: -1 }); // Get the most recently updated record
+        }
 
         if (!patient) {
             console.error('ERROR: Patient not found');
             return res.status(404).json({
                 success: false,
-                message: `Patient not found with doctor_id: ${doctor_id}, patient_id: ${patient_id || 'N/A'}, phone: ${patient_phone || 'N/A'}`
+                message: doctor_id 
+                    ? `Patient not found with doctor_id: ${doctor_id}, patient_id: ${patient_id || 'N/A'}, phone: ${patient_phone || 'N/A'}`
+                    : `No patient record found with patient_id: ${patient_id || 'N/A'} or phone: ${patient_phone || 'N/A'}. Please visit a doctor first to create your profile.`
             });
         }
         
-        console.log('Patient found:', patient.patient_id, patient.patient_name);
+        console.log('Patient found:', patient.patient_id, patient.patient_name, 'under doctor:', patient.doctor_id);
 
         // Process uploaded files
         const uploadedReports = files.map(file => {
@@ -101,8 +113,10 @@ const uploadPatientReport = async (req, res) => {
                 image_url: imageUrl,
                 report_type: report_type || 'report', // Default to 'report' if not provided
                 description: description || '',
-                uploaded_by: uploaded_by || '',
-                uploaded_at: new Date()
+                uploaded_by: uploaded_by || 'patient', // Default to 'patient' for self-uploads
+                uploaded_at: new Date(),
+                doctor_id: patient.doctor_id, // Store which doctor's record this is under
+                doctor_name: '' // Will be populated when fetching
             };
         });
 

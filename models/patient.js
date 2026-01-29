@@ -166,7 +166,7 @@ const patientSchema = new mongoose.Schema({
         },
         report_type: {
             type: String,
-            default: "examination" // examination, report, investigation
+            default: "report" // report, examination, investigation, lab, xray
         },
         description: {
             type: String,
@@ -174,11 +174,19 @@ const patientSchema = new mongoose.Schema({
         },
         uploaded_by: {
             type: String,
-            default: "" // assistant_id or user_id
+            default: "patient" // 'patient', 'assistant', or actual user_id
         },
         uploaded_at: {
             type: Date,
             default: Date.now
+        },
+        doctor_id: {
+            type: String,
+            default: "" // The doctor this report is associated with (if any)
+        },
+        doctor_name: {
+            type: String,
+            default: "" // Doctor's name for display
         }
     }]
 }, { 
