@@ -154,7 +154,33 @@ const patientSchema = new mongoose.Schema({
     assistant_id: {
         type: String,
         default: ""
-    }
+    },
+    reports: [{
+        report_id: {
+            type: String,
+            default: () => require('uuid').v4()
+        },
+        image_url: {
+            type: String,
+            required: true
+        },
+        report_type: {
+            type: String,
+            default: "examination" // examination, report, investigation
+        },
+        description: {
+            type: String,
+            default: ""
+        },
+        uploaded_by: {
+            type: String,
+            default: "" // assistant_id or user_id
+        },
+        uploaded_at: {
+            type: Date,
+            default: Date.now
+        }
+    }]
 }, { 
     timestamps: true 
 });

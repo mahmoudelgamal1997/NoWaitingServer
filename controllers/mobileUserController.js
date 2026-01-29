@@ -46,6 +46,7 @@ const getPatientProfile = async (req, res) => {
             doctors: [], // List of all doctors this patient has visited
             total_visits: 0,
             total_receipts: 0,
+            total_reports: 0,
             created_at: patientRecords[0].createdAt,
             last_visit_date: null
         };
@@ -53,6 +54,7 @@ const getPatientProfile = async (req, res) => {
         // Collect all visits and doctors
         const allVisits = [];
         const doctorsMap = new Map();
+        let totalReports = 0;
 
         patientRecords.forEach(record => {
             // Track unique doctors
@@ -75,6 +77,11 @@ const getPatientProfile = async (req, res) => {
                 });
             }
 
+            // Count reports
+            if (record.reports && record.reports.length > 0) {
+                totalReports += record.reports.length;
+            }
+
             // Update profile info from most recent record
             const recordDate = new Date(record.updatedAt || record.createdAt);
             const currentDate = new Date(aggregatedProfile.created_at || 0);
@@ -94,6 +101,7 @@ const getPatientProfile = async (req, res) => {
         });
 
         aggregatedProfile.total_visits = allVisits.length;
+        aggregatedProfile.total_reports = totalReports;
         aggregatedProfile.doctors = Array.from(doctorsMap.values());
         aggregatedProfile.last_visit_date = allVisits.length > 0 ? allVisits[0].date : null;
 
@@ -573,13 +581,15 @@ const getPatientAllData = async (req, res) => {
             doctors: [],
             total_visits: 0,
             total_receipts: 0,
+            total_reports: 0,
             created_at: patientRecords[0].createdAt,
             last_visit_date: null
         };
 
-        // Collect all visits and receipts
+        // Collect all visits, receipts, and reports
         const allVisits = [];
         const allReceipts = [];
+        const allReports = [];
         const doctorsMap = new Map();
 
         patientRecords.forEach(record => {
@@ -644,6 +654,17 @@ const getPatientAllData = async (req, res) => {
                 });
             }
 
+            // Collect reports from this record
+            if (record.reports && record.reports.length > 0) {
+                record.reports.forEach(report => {
+                    allReports.push({
+                        ...report,
+                        doctor_id: record.doctor_id,
+                        doctor_name: record.doctor_name || ''
+                    });
+                });
+            }
+
             // Update profile info from most recent record
             const recordDate = new Date(record.updatedAt || record.createdAt);
             const currentDate = new Date(aggregatedProfile.created_at || 0);
@@ -669,10 +690,18 @@ const getPatientAllData = async (req, res) => {
             return dateB.getTime() - dateA.getTime();
         });
 
+        // Sort reports by upload date (most recent first)
+        allReports.sort((a, b) => {
+            const dateA = new Date(a.uploaded_at || 0);
+            const dateB = new Date(b.uploaded_at || 0);
+            return dateB.getTime() - dateA.getTime();
+        });
+
         // Update profile stats
         aggregatedProfile.doctors = Array.from(doctorsMap.values());
         aggregatedProfile.total_visits = allVisits.length;
         aggregatedProfile.total_receipts = allReceipts.length;
+        aggregatedProfile.total_reports = allReports.length;
         aggregatedProfile.last_visit_date = allVisits.length > 0 ? allVisits[0].date : null;
 
         res.status(200).json({
@@ -681,7 +710,8 @@ const getPatientAllData = async (req, res) => {
             data: {
                 profile: aggregatedProfile,
                 visits: allVisits,
-                receipts: allReceipts
+                receipts: allReceipts,
+                reports: allReports
             },
             filters: {
                 patient_id: patient_id || null,
@@ -703,11 +733,145 @@ const getPatientAllData = async (req, res) => {
     }
 };
 
+/**
+ * Get all reports for a patient across all doctors
+ * Returns paginated list of all reports
+ */
+const getPatientReports = async (req, res) => {
+    try {
+        const { patient_id, phone } = req.query;
+        const {
+            page = 1,
+            limit = 20,
+            startDate,
+            endDate,
+            doctor_id,
+            report_type,
+            sortOrder = 'desc'
+        } = req.query;
+
+        // Validate input
+        if (!patient_id && !phone) {
+            return res.status(400).json({
+                success: false,
+                message: 'Either patient_id or phone is required'
+            });
+        }
+
+        // Build query
+        let query = {};
+        if (patient_id) {
+            query.patient_id = patient_id;
+        } else if (phone) {
+            query.patient_phone = phone;
+        }
+
+        // Filter by doctor if specified
+        if (doctor_id) {
+            query.doctor_id = doctor_id;
+        }
+
+        // Find all patient records
+        const patientRecords = await Patient.find(query).lean();
+
+        if (!patientRecords || patientRecords.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Patient not found'
+            });
+        }
+
+        // Collect all reports from all records
+        let allReports = [];
+        patientRecords.forEach(record => {
+            if (record.reports && record.reports.length > 0) {
+                record.reports.forEach(report => {
+                    // Apply date filters
+                    if (startDate && new Date(report.uploaded_at) < new Date(startDate)) {
+                        return;
+                    }
+                    if (endDate && new Date(report.uploaded_at) > new Date(endDate)) {
+                        return;
+                    }
+                    // Apply report type filter
+                    if (report_type && report.report_type !== report_type) {
+                        return;
+                    }
+
+                    allReports.push({
+                        report_id: report.report_id,
+                        image_url: report.image_url,
+                        report_type: report.report_type || 'examination',
+                        description: report.description || '',
+                        uploaded_by: report.uploaded_by || '',
+                        uploaded_at: report.uploaded_at,
+                        doctor_id: record.doctor_id,
+                        doctor_name: record.doctor_name || ''
+                    });
+                });
+            }
+        });
+
+        // Sort reports by upload date
+        const sortMultiplier = sortOrder === 'asc' ? 1 : -1;
+        allReports.sort((a, b) => {
+            const dateA = new Date(a.uploaded_at || 0);
+            const dateB = new Date(b.uploaded_at || 0);
+            return (dateB.getTime() - dateA.getTime()) * sortMultiplier;
+        });
+
+        // Apply pagination
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const totalReports = allReports.length;
+        const skip = (pageNum - 1) * limitNum;
+        const paginatedReports = allReports.slice(skip, skip + limitNum);
+
+        // Calculate pagination metadata
+        const totalPages = Math.ceil(totalReports / limitNum);
+        const hasNextPage = pageNum < totalPages;
+        const hasPrevPage = pageNum > 1;
+
+        res.status(200).json({
+            success: true,
+            message: 'Patient reports retrieved successfully',
+            data: paginatedReports,
+            pagination: {
+                currentPage: pageNum,
+                totalPages: totalPages,
+                totalItems: totalReports,
+                itemsPerPage: limitNum,
+                hasNextPage: hasNextPage,
+                hasPrevPage: hasPrevPage,
+                nextPage: hasNextPage ? pageNum + 1 : null,
+                prevPage: hasPrevPage ? pageNum - 1 : null
+            },
+            filters: {
+                patient_id: patient_id || null,
+                phone: phone || null,
+                startDate: startDate || null,
+                endDate: endDate || null,
+                doctor_id: doctor_id || null,
+                report_type: report_type || null,
+                sortOrder: sortOrder
+            }
+        });
+    } catch (error) {
+        console.error('Error retrieving patient reports:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error retrieving patient reports',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getPatientProfile,
     getPatientVisits,
     getPatientReceipts,
     getPatientVisitDates,
-    getPatientAllData
+    getPatientAllData,
+    getPatientReports
 };
 

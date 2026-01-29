@@ -1,12 +1,14 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const dotenv = require('dotenv');
+const path = require('path');
 const connectDB = require('./config/db');
 const patientRoutes = require('./routes/patientRoutes');
 const searchRoutes = require('./routes/searchRoutes');
 const doctorRoutes = require('./routes/doctorRoutes');
 const historyRoutes = require('./routes/historyRoutes');
 const mobileUserRoutes = require('./routes/mobileUserRoutes');
+const reportRoutes = require('./routes/reportRoutes');
 
 const cors = require('cors');
 
@@ -67,6 +69,10 @@ app.use(cors({
 }));
 
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Serve static files from uploads directory
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Register routes
 app.use('/api', patientRoutes);
@@ -74,6 +80,7 @@ app.use('/api', searchRoutes);
 app.use('/api', doctorRoutes);
 app.use('/api', historyRoutes);
 app.use('/api', mobileUserRoutes);
+app.use('/api', reportRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

@@ -12,7 +12,14 @@
     "dev": "nodemon server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["api", "patient", "history", "healthcare", "express", "mongodb"],
+  "keywords": [
+    "api",
+    "patient",
+    "history",
+    "healthcare",
+    "express",
+    "mongodb"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
@@ -23,6 +30,7 @@
     "jspdf": "^3.0.1",
     "jspdf-autotable": "^5.0.2",
     "mongoose": "^8.12.2",
+    "multer": "^2.0.2",
     "uuid": "^9.0.1",
     "xlsx": "^0.18.5"
   },
