@@ -1,0 +1,184 @@
+# CURL Commands for Postman Import
+# Copy these commands and paste into Postman's "Import" → "Raw text"
+
+# ============================================
+# 1. DEBUG - Check What Data Exists
+# ============================================
+
+# Debug All Patients
+curl --location 'http://localhost:6000/api/history/debug' \
+--header 'Content-Type: application/json'
+
+# Debug by Doctor ID
+curl --location 'http://localhost:6000/api/history/debug?doctor_id=doc-123' \
+--header 'Content-Type: application/json'
+
+
+# ============================================
+# 2. CREATE PATIENT (Adds Data to Database)
+# ============================================
+
+# Create New Patient
+curl --location 'http://localhost:6000/api/patients' \
+--header 'Content-Type: application/json' \
+--data '{
+  "patient_name": "Ahmed Mohamed",
+  "patient_phone": "01234567890",
+  "doctor_id": "doc-123",
+  "doctor_name": "Dr. Ali",
+  "age": "35",
+  "address": "Cairo, Egypt",
+  "visit_type": "كشف",
+  "complaint": "Headache and fever",
+  "diagnosis": "Common cold",
+  "status": "WAITING"
+}'
+
+# Create Patient - Minimal (Required fields only)
+curl --location 'http://localhost:6000/api/patients' \
+--header 'Content-Type: application/json' \
+--data '{
+  "patient_name": "Test Patient",
+  "patient_phone": "01000000000",
+  "doctor_id": "test-doctor",
+  "visit_type": "كشف",
+  "complaint": "Test complaint",
+  "diagnosis": "Test diagnosis"
+}'
+
+
+# ============================================
+# 3. GET HISTORY
+# ============================================
+
+# Get All History
+curl --location 'http://localhost:6000/api/history' \
+--header 'Content-Type: application/json'
+
+# Get History with Pagination
+curl --location 'http://localhost:6000/api/history?page=1&limit=20' \
+--header 'Content-Type: application/json'
+
+# Get History by Doctor
+curl --location 'http://localhost:6000/api/history?doctor_id=doc-123&page=1&limit=20' \
+--header 'Content-Type: application/json'
+
+# Get History with Search
+curl --location 'http://localhost:6000/api/history?search=Ahmed&page=1&limit=20' \
+--header 'Content-Type: application/json'
+
+# Get History with Date Filter
+curl --location 'http://localhost:6000/api/history?startDate=2024-01-01&endDate=2024-12-31' \
+--header 'Content-Type: application/json'
+
+# Get History Sorted by Name
+curl --location 'http://localhost:6000/api/history?sortBy=name&sortOrder=asc' \
+--header 'Content-Type: application/json'
+
+# Get History - All Filters Combined
+curl --location 'http://localhost:6000/api/history?doctor_id=doc-123&page=1&limit=20&sortBy=date&sortOrder=desc&search=Ahmed' \
+--header 'Content-Type: application/json'
+
+
+# ============================================
+# 4. GET HISTORY SUMMARY
+# ============================================
+
+# Get Summary (All Doctors)
+curl --location 'http://localhost:6000/api/history/summary' \
+--header 'Content-Type: application/json'
+
+# Get Summary by Doctor
+curl --location 'http://localhost:6000/api/history/summary?doctor_id=doc-123' \
+--header 'Content-Type: application/json'
+
+# Get Summary with Date Range
+curl --location 'http://localhost:6000/api/history/summary?doctor_id=doc-123&startDate=2024-01-01&endDate=2024-12-31' \
+--header 'Content-Type: application/json'
+
+
+# ============================================
+# 5. GET ALL VISITS (Flat List)
+# ============================================
+
+# Get All Visits
+curl --location 'http://localhost:6000/api/history/visits?page=1&limit=20' \
+--header 'Content-Type: application/json'
+
+# Get Visits by Doctor
+curl --location 'http://localhost:6000/api/history/visits?doctor_id=doc-123&page=1&limit=20' \
+--header 'Content-Type: application/json'
+
+# Get Visits by Type
+curl --location 'http://localhost:6000/api/history/visits?visit_type=كشف&page=1&limit=20' \
+--header 'Content-Type: application/json'
+
+# Get Visits with Date Filter
+curl --location 'http://localhost:6000/api/history/visits?startDate=2024-01-01&endDate=2024-12-31' \
+--header 'Content-Type: application/json'
+
+
+# ============================================
+# 6. CREATE VISIT FOR EXISTING PATIENT
+# ============================================
+
+curl --location 'http://localhost:6000/api/patients/visits' \
+--header 'Content-Type: application/json' \
+--data '{
+  "patient_id": "pat-123",
+  "doctor_id": "doc-123",
+  "visit_type": "كشف",
+  "complaint": "New complaint",
+  "diagnosis": "New diagnosis",
+  "drugs": [
+    {
+      "drug": "Paracetamol",
+      "frequency": "3 times daily",
+      "period": "5 days",
+      "timing": "After meals"
+    }
+  ]
+}'
+
+
+# ============================================
+# QUICK TEST SEQUENCE
+# ============================================
+
+# Step 1: Check if data exists
+curl --location 'http://localhost:6000/api/history/debug' \
+--header 'Content-Type: application/json'
+
+# Step 2: Create test patient (if no data)
+curl --location 'http://localhost:6000/api/patients' \
+--header 'Content-Type: application/json' \
+--data '{
+  "patient_name": "Test Patient",
+  "patient_phone": "01000000000",
+  "doctor_id": "test-doctor",
+  "visit_type": "كشف",
+  "complaint": "Test",
+  "diagnosis": "Test"
+}'
+
+# Step 3: Get history
+curl --location 'http://localhost:6000/api/history?doctor_id=test-doctor' \
+--header 'Content-Type: application/json'
+
+# Step 4: Get summary
+curl --location 'http://localhost:6000/api/history/summary?doctor_id=test-doctor' \
+--header 'Content-Type: application/json'
+
+
+# ============================================
+# FOR HEROKU DEPLOYMENT
+# ============================================
+# Replace http://localhost:6000 with your Heroku URL
+# Example: https://your-app-name.herokuapp.com
+
+curl --location 'https://your-app-name.herokuapp.com/api/history/debug' \
+--header 'Content-Type: application/json'
+
+
+
+

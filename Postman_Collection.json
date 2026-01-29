@@ -1,0 +1,444 @@
+{
+	"info": {
+		"_postman_id": "patient-history-api-collection",
+		"name": "Patient History API",
+		"description": "Complete API collection for Patient History with pagination",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Debug - Check Data",
+			"item": [
+				{
+					"name": "Debug All Patients",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/history/debug",
+							"host": ["{{base_url}}"],
+							"path": ["api", "history", "debug"]
+						}
+					}
+				},
+				{
+					"name": "Debug by Doctor ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/history/debug?doctor_id=doc-123",
+							"host": ["{{base_url}}"],
+							"path": ["api", "history", "debug"],
+							"query": [
+								{
+									"key": "doctor_id",
+									"value": "doc-123",
+									"description": "Doctor ID to filter"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Create Patient",
+			"item": [
+				{
+					"name": "Create New Patient",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"patient_name\": \"Ahmed Mohamed\",\n  \"patient_phone\": \"01234567890\",\n  \"doctor_id\": \"doc-123\",\n  \"doctor_name\": \"Dr. Ali\",\n  \"age\": \"35\",\n  \"address\": \"Cairo, Egypt\",\n  \"visit_type\": \"كشف\",\n  \"complaint\": \"Headache and fever\",\n  \"diagnosis\": \"Common cold\",\n  \"status\": \"WAITING\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/patients",
+							"host": ["{{base_url}}"],
+							"path": ["api", "patients"]
+						}
+					}
+				},
+				{
+					"name": "Create Patient - Minimal",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"patient_name\": \"Test Patient\",\n  \"patient_phone\": \"01000000000\",\n  \"doctor_id\": \"test-doctor\",\n  \"visit_type\": \"كشف\",\n  \"complaint\": \"Test complaint\",\n  \"diagnosis\": \"Test diagnosis\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/patients",
+							"host": ["{{base_url}}"],
+							"path": ["api", "patients"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Get History",
+			"item": [
+				{
+					"name": "Get All History",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/history",
+							"host": ["{{base_url}}"],
+							"path": ["api", "history"]
+						}
+					}
+				},
+				{
+					"name": "Get History with Pagination",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/history?page=1&limit=20",
+							"host": ["{{base_url}}"],
+							"path": ["api", "history"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get History by Doctor",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/history?doctor_id=doc-123&page=1&limit=20",
+							"host": ["{{base_url}}"],
+							"path": ["api", "history"],
+							"query": [
+								{
+									"key": "doctor_id",
+									"value": "doc-123"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get History with Search",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/history?search=Ahmed&page=1&limit=20",
+							"host": ["{{base_url}}"],
+							"path": ["api", "history"],
+							"query": [
+								{
+									"key": "search",
+									"value": "Ahmed"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get History with Date Filter",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/history?startDate=2024-01-01&endDate=2024-12-31",
+							"host": ["{{base_url}}"],
+							"path": ["api", "history"],
+							"query": [
+								{
+									"key": "startDate",
+									"value": "2024-01-01"
+								},
+								{
+									"key": "endDate",
+									"value": "2024-12-31"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get History Sorted by Name",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/history?sortBy=name&sortOrder=asc",
+							"host": ["{{base_url}}"],
+							"path": ["api", "history"],
+							"query": [
+								{
+									"key": "sortBy",
+									"value": "name"
+								},
+								{
+									"key": "sortOrder",
+									"value": "asc"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "History Summary",
+			"item": [
+				{
+					"name": "Get Summary",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/history/summary",
+							"host": ["{{base_url}}"],
+							"path": ["api", "history", "summary"]
+						}
+					}
+				},
+				{
+					"name": "Get Summary by Doctor",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/history/summary?doctor_id=doc-123",
+							"host": ["{{base_url}}"],
+							"path": ["api", "history", "summary"],
+							"query": [
+								{
+									"key": "doctor_id",
+									"value": "doc-123"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Get All Visits",
+			"item": [
+				{
+					"name": "Get All Visits",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/history/visits?page=1&limit=20",
+							"host": ["{{base_url}}"],
+							"path": ["api", "history", "visits"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Visits by Doctor",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/history/visits?doctor_id=doc-123&page=1&limit=20",
+							"host": ["{{base_url}}"],
+							"path": ["api", "history", "visits"],
+							"query": [
+								{
+									"key": "doctor_id",
+									"value": "doc-123"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Visits by Type",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/history/visits?visit_type=كشف&page=1&limit=20",
+							"host": ["{{base_url}}"],
+							"path": ["api", "history", "visits"],
+							"query": [
+								{
+									"key": "visit_type",
+									"value": "كشف"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Create Visit",
+			"item": [
+				{
+					"name": "Create Patient Visit",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"patient_id\": \"pat-123\",\n  \"doctor_id\": \"doc-123\",\n  \"visit_type\": \"كشف\",\n  \"complaint\": \"New complaint\",\n  \"diagnosis\": \"New diagnosis\",\n  \"drugs\": [\n    {\n      \"drug\": \"Paracetamol\",\n      \"frequency\": \"3 times daily\",\n      \"period\": \"5 days\",\n      \"timing\": \"After meals\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/patients/visits",
+							"host": ["{{base_url}}"],
+							"path": ["api", "patients", "visits"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:6000",
+			"type": "string"
+		}
+	]
+}
+
+
+
+

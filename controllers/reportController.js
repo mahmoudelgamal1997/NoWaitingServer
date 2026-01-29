@@ -15,6 +15,15 @@ if (!fs.existsSync(uploadsDir)) {
  */
 const uploadPatientReport = async (req, res) => {
     try {
+        console.log('=== UPLOAD REQUEST RECEIVED ===');
+        console.log('Request method:', req.method);
+        console.log('Request URL:', req.url);
+        console.log('Content-Type:', req.headers['content-type']);
+        console.log('Request body keys:', Object.keys(req.body || {}));
+        console.log('Request body:', JSON.stringify(req.body, null, 2));
+        console.log('Files array:', req.files ? req.files.length : 0);
+        console.log('Files:', req.files ? req.files.map(f => ({ name: f.originalname, size: f.size, mimetype: f.mimetype })) : 'none');
+        
         // Multer parses form fields into req.body
         const patient_id = req.body.patient_id;
         const patient_phone = req.body.patient_phone;
@@ -22,9 +31,6 @@ const uploadPatientReport = async (req, res) => {
         const report_type = req.body.report_type; // Optional, defaults to 'report'
         const description = req.body.description || '';
         const uploaded_by = req.body.uploaded_by || '';
-        
-        console.log('Upload request body:', req.body);
-        console.log('Upload files:', req.files);
 
         // Validate required fields
         if (!patient_id && !patient_phone) {
@@ -44,14 +50,29 @@ const uploadPatientReport = async (req, res) => {
         // Get files from request (multer handles this)
         const files = req.files || (req.file ? [req.file] : []);
         
+        console.log('Files received:', files.length);
+        if (files.length > 0) {
+            files.forEach((file, index) => {
+                console.log(`File ${index + 1}:`, {
+                    originalname: file.originalname,
+                    filename: file.filename,
+                    mimetype: file.mimetype,
+                    size: file.size,
+                    path: file.path
+                });
+            });
+        }
+        
         if (!files || files.length === 0) {
+            console.error('ERROR: No files in request');
             return res.status(400).json({
                 success: false,
-                message: 'No files uploaded'
+                message: 'No files uploaded. Please select at least one image.'
             });
         }
 
         // Find patient by phone or ID
+        console.log('Searching for patient:', { doctor_id, patient_id, patient_phone });
         let patient = await Patient.findOne({
             doctor_id,
             $or: [
@@ -61,11 +82,14 @@ const uploadPatientReport = async (req, res) => {
         });
 
         if (!patient) {
+            console.error('ERROR: Patient not found');
             return res.status(404).json({
                 success: false,
-                message: 'Patient not found'
+                message: `Patient not found with doctor_id: ${doctor_id}, patient_id: ${patient_id || 'N/A'}, phone: ${patient_phone || 'N/A'}`
             });
         }
+        
+        console.log('Patient found:', patient.patient_id, patient.patient_name);
 
         // Process uploaded files
         const uploadedReports = files.map(file => {
@@ -104,8 +128,13 @@ const uploadPatientReport = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Error uploading report:', error);
+        console.error('=== ERROR UPLOADING REPORT ===');
+        console.error('Error message:', error.message);
+        console.error('Error name:', error.name);
         console.error('Error stack:', error.stack);
+        console.error('Request body:', req.body);
+        console.error('Request files:', req.files);
+        
         res.status(500).json({
             success: false,
             message: 'Error uploading report',

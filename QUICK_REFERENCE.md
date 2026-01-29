@@ -59,3 +59,4 @@ GET /api/patients/doctor/p9glvVX45eTZway7nOeS?page=1&limit=20&search=Ahmed&start
 ✅ **Backward compatible** - existing code works without changes  
 ✅ **Pagination is optional** - omit page/limit to get all results
 
+

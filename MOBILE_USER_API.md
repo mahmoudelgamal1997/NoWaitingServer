@@ -585,3 +585,4 @@ curl -X GET "http://localhost:6000/api/mobile/visit-dates?patient_id=pat123" \
 - Receipts are nested within visits
 - The profile endpoint provides a summary view of all patient data
 
+
