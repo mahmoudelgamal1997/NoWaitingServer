@@ -408,12 +408,81 @@ const deleteBilling = async (req, res) => {
     }
 };
 
+// Quick record consultation fee - called when patient joins waiting list
+// This creates a simple billing record with just consultation fee (no services)
+const recordConsultation = async (req, res) => {
+    try {
+        const {
+            doctor_id,
+            patient_id,
+            patient_name,
+            patient_phone,
+            clinic_id,
+            consultationType,  // 'كشف' or 'اعاده كشف'
+            consultationFee,
+            paymentMethod
+        } = req.body;
+
+        // Validate required fields
+        if (!doctor_id || !patient_id || !patient_name) {
+            return res.status(400).json({ 
+                success: false,
+                message: 'Doctor ID, Patient ID, and Patient Name are required' 
+            });
+        }
+
+        if (!consultationFee || consultationFee <= 0) {
+            return res.status(400).json({ 
+                success: false,
+                message: 'Consultation fee is required and must be greater than 0' 
+            });
+        }
+
+        const billing = new Billing({
+            billing_id: uuidv4(),
+            doctor_id,
+            patient_id,
+            patient_name,
+            patient_phone: patient_phone || "",
+            clinic_id: clinic_id || "",
+            consultationFee: consultationFee,
+            consultationType: consultationType || "كشف",
+            services: [],  // No services for quick consultation
+            servicesTotal: 0,
+            subtotal: consultationFee,
+            discount: null,
+            totalAmount: consultationFee,
+            paymentStatus: 'paid',  // Consultation is paid upfront
+            paymentMethod: paymentMethod || 'cash',
+            amountPaid: consultationFee,
+            notes: "Consultation fee recorded on patient arrival",
+            billingDate: new Date()
+        });
+
+        await billing.save();
+
+        res.status(201).json({
+            success: true,
+            message: 'Consultation recorded successfully',
+            data: billing
+        });
+    } catch (error) {
+        console.error('Error recording consultation:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error recording consultation',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     createBilling,
     getBillings,
     getBilling,
     getBillingByVisit,
     updateBilling,
-    deleteBilling
+    deleteBilling,
+    recordConsultation
 };
 

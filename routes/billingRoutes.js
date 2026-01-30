@@ -6,7 +6,8 @@ const {
     getBilling,
     getBillingByVisit,
     updateBilling,
-    deleteBilling
+    deleteBilling,
+    recordConsultation
 } = require('../controllers/billingController');
 
 // Middleware to verify authentication
@@ -17,6 +18,7 @@ const authenticateUser = (req, res, next) => {
 
 // Billing routes
 router.post('/billing', authenticateUser, createBilling);
+router.post('/billing/consultation', authenticateUser, recordConsultation); // Quick consultation record
 router.get('/billing/doctor/:doctor_id', authenticateUser, getBillings);
 router.get('/billing/doctor/:doctor_id/:billing_id', authenticateUser, getBilling);
 router.get('/billing/visit/:visit_id', authenticateUser, getBillingByVisit);
