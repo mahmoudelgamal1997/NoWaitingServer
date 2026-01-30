@@ -40,6 +40,31 @@ const getRevenueOverview = async (req, res) => {
             }
         ]);
 
+        // Get consultation type breakdown (كشف vs اعاده كشف)
+        const consultationBreakdown = await Billing.aggregate([
+            { $match: matchStage },
+            {
+                $group: {
+                    _id: '$consultationType',
+                    count: { $sum: 1 },
+                    revenue: { $sum: '$consultationFee' },
+                    totalBillAmount: { $sum: '$totalAmount' }
+                }
+            },
+            { $sort: { count: -1 } }
+        ]);
+
+        // Map to readable format
+        const consultationByType = {};
+        consultationBreakdown.forEach(item => {
+            const type = item._id || 'other';
+            consultationByType[type] = {
+                count: item.count,
+                consultationRevenue: item.revenue,
+                totalBillAmount: item.totalBillAmount
+            };
+        });
+
         const overview = result[0] || {
             totalRevenue: 0,
             totalConsultationFees: 0,
@@ -60,6 +85,8 @@ const getRevenueOverview = async (req, res) => {
             message: 'Revenue overview retrieved successfully',
             data: {
                 ...overview,
+                // Breakdown by consultation type (كشف, اعاده كشف, etc.)
+                consultationByType,
                 period: {
                     startDate: start,
                     endDate: end

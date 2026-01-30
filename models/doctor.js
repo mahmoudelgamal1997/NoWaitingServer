@@ -42,6 +42,16 @@ const doctorSchema = new mongoose.Schema({
         logoUrl: { 
             type: String, 
             default: "" 
+        },
+        // Consultation fees (كشف)
+        consultationFee: {
+            type: Number,
+            default: 0
+        },
+        // Revisit/Re-consultation fee (اعاده كشف)
+        revisitFee: {
+            type: Number,
+            default: 0
         }
     },
     createdAt: { 

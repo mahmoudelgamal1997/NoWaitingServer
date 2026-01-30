@@ -17,7 +17,9 @@ const updateDoctorSettings = async (req, res) => {
             doctorTitle,
             clinicAddress,
             clinicPhone,
-            logoUrl
+            logoUrl,
+            consultationFee,
+            revisitFee
         } = req.body;
 
         // Find the doctor document or create if it doesn't exist
@@ -34,7 +36,9 @@ const updateDoctorSettings = async (req, res) => {
                     doctorTitle: doctorTitle !== undefined ? doctorTitle : '',
                     clinicAddress: clinicAddress !== undefined ? clinicAddress : '',
                     clinicPhone: clinicPhone !== undefined ? clinicPhone : '',
-                    logoUrl: logoUrl !== undefined ? logoUrl : ''
+                    logoUrl: logoUrl !== undefined ? logoUrl : '',
+                    consultationFee: consultationFee !== undefined ? consultationFee : 0,
+                    revisitFee: revisitFee !== undefined ? revisitFee : 0
                 },
                 updatedAt: new Date()
             });
@@ -42,7 +46,7 @@ const updateDoctorSettings = async (req, res) => {
         } else {
             // Update existing doctor settings
             // Important: use checking against undefined, not the || operator
-            // This allows empty strings to be set intentionally
+            // This allows empty strings and 0 values to be set intentionally
             doctor.settings = {
                 receiptHeader: receiptHeader !== undefined ? receiptHeader : doctor.settings.receiptHeader,
                 receiptFooter: receiptFooter !== undefined ? receiptFooter : doctor.settings.receiptFooter,
@@ -50,7 +54,9 @@ const updateDoctorSettings = async (req, res) => {
                 doctorTitle: doctorTitle !== undefined ? doctorTitle : doctor.settings.doctorTitle,
                 clinicAddress: clinicAddress !== undefined ? clinicAddress : doctor.settings.clinicAddress,
                 clinicPhone: clinicPhone !== undefined ? clinicPhone : doctor.settings.clinicPhone,
-                logoUrl: logoUrl !== undefined ? logoUrl : doctor.settings.logoUrl
+                logoUrl: logoUrl !== undefined ? logoUrl : doctor.settings.logoUrl,
+                consultationFee: consultationFee !== undefined ? consultationFee : (doctor.settings.consultationFee || 0),
+                revisitFee: revisitFee !== undefined ? revisitFee : (doctor.settings.revisitFee || 0)
             };
             doctor.updatedAt = new Date();
             await doctor.save();
@@ -93,7 +99,9 @@ const getDoctorSettings = async (req, res) => {
                     doctorTitle: "",
                     clinicAddress: "",
                     clinicPhone: "",
-                    logoUrl: ""
+                    logoUrl: "",
+                    consultationFee: 0,
+                    revisitFee: 0
                 }
             });
         }
