@@ -59,7 +59,12 @@ const visitSchema = new mongoose.Schema({
         type: String, 
         default: "" 
     },
-    receipts: [receiptSchema]
+    receipts: [receiptSchema],
+    // Billing reference - links to billing record
+    billing_id: { 
+        type: String, 
+        default: "" 
+    }
 }, { _id: true });
 
 const patientSchema = new mongoose.Schema({

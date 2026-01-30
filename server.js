@@ -10,6 +10,9 @@ const doctorRoutes = require('./routes/doctorRoutes');
 const historyRoutes = require('./routes/historyRoutes');
 const mobileUserRoutes = require('./routes/mobileUserRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const serviceRoutes = require('./routes/serviceRoutes');
+const billingRoutes = require('./routes/billingRoutes');
+const analyticsRoutes = require('./routes/analyticsRoutes');
 
 const cors = require('cors');
 
@@ -83,6 +86,9 @@ app.use('/api', doctorRoutes);
 app.use('/api', historyRoutes);
 app.use('/api', mobileUserRoutes);
 app.use('/api', reportRoutes);
+app.use('/api', serviceRoutes);
+app.use('/api', billingRoutes);
+app.use('/api', analyticsRoutes);
 
 // Error handling middleware - must be after routes
 app.use((err, req, res, next) => {
