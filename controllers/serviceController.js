@@ -4,7 +4,7 @@ const { v4: uuidv4 } = require('uuid');
 // Create a new service
 const createService = async (req, res) => {
     try {
-        const { doctor_id, name, name_ar, description, price, category } = req.body;
+        const { doctor_id, name, description, price, category } = req.body;
 
         // Validate required fields
         if (!doctor_id || !name || price === undefined) {
@@ -25,7 +25,6 @@ const createService = async (req, res) => {
             service_id: uuidv4(),
             doctor_id,
             name,
-            name_ar: name_ar || "",
             description: description || "",
             price,
             category: category || "general"
@@ -124,7 +123,7 @@ const getService = async (req, res) => {
 const updateService = async (req, res) => {
     try {
         const { doctor_id, service_id } = req.params;
-        const { name, name_ar, description, price, category, isActive } = req.body;
+        const { name, description, price, category, isActive } = req.body;
 
         if (!doctor_id || !service_id) {
             return res.status(400).json({ 
@@ -144,7 +143,6 @@ const updateService = async (req, res) => {
 
         // Update fields if provided
         if (name !== undefined) service.name = name;
-        if (name_ar !== undefined) service.name_ar = name_ar;
         if (description !== undefined) service.description = description;
         if (price !== undefined) {
             if (price < 0) {
