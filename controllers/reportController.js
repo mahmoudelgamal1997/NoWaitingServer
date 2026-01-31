@@ -1,4 +1,5 @@
 const Patient = require('../models/patient');
+const Doctor = require('../models/doctor');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 const fs = require('fs');
@@ -69,36 +70,72 @@ const uploadPatientReport = async (req, res) => {
         // Find patient by phone or ID
         console.log('Searching for patient:', { doctor_id, patient_id, patient_phone });
         
-        let patient;
-        
-        if (doctor_id) {
-            // If doctor_id provided, find patient under that specific doctor
-            patient = await Patient.findOne({
-                doctor_id,
-                $or: [
-                    { patient_id: patient_id || '' },
-                    { patient_phone: patient_phone || '' }
-                ]
+        // Validate required fields
+        if (!patient_phone || patient_phone.trim() === '') {
+            return res.status(400).json({
+                success: false,
+                message: 'patient_phone is required'
             });
-        } else {
-            // If no doctor_id (patient self-upload), find ANY patient record with this phone/id
-            // This allows patients to upload reports without specifying a doctor
-            patient = await Patient.findOne({
-                $or: [
-                    { patient_id: patient_id || '' },
-                    { patient_phone: patient_phone || '' }
-                ]
-            }).sort({ updatedAt: -1 }); // Get the most recently updated record
         }
 
-        if (!patient) {
-            console.error('ERROR: Patient not found');
-            return res.status(404).json({
+        if (!doctor_id || doctor_id.trim() === '') {
+            return res.status(400).json({
                 success: false,
-                message: doctor_id 
-                    ? `Patient not found with doctor_id: ${doctor_id}, patient_id: ${patient_id || 'N/A'}, phone: ${patient_phone || 'N/A'}`
-                    : `No patient record found with patient_id: ${patient_id || 'N/A'} or phone: ${patient_phone || 'N/A'}. Please visit a doctor first to create your profile.`
+                message: 'doctor_id is required'
             });
+        }
+
+        const trimmedPhone = patient_phone.trim();
+        const trimmedDoctorId = doctor_id.trim();
+        const trimmedPatientId = patient_id ? patient_id.trim() : null;
+        
+        let patient;
+        
+        // First try: Find by patient_phone + doctor_id (same as visit logic - primary match)
+        patient = await Patient.findOne({
+            patient_phone: trimmedPhone,
+            doctor_id: trimmedDoctorId
+        });
+
+        // Second try: If patient_id provided and not found by phone, try patient_id + doctor_id
+        if (!patient && trimmedPatientId) {
+            patient = await Patient.findOne({
+                patient_id: trimmedPatientId,
+                doctor_id: trimmedDoctorId
+            });
+        }
+
+        // If patient not found, create minimal patient record
+        if (!patient) {
+            console.log('Patient not found, creating minimal patient record');
+            
+            // Try to fetch doctor name from Doctor collection
+            let resolvedDoctorName = '';
+            try {
+                const doctor = await Doctor.findOne({ doctor_id: trimmedDoctorId });
+                if (doctor && doctor.name) {
+                    resolvedDoctorName = doctor.name;
+                }
+            } catch (error) {
+                console.warn('Could not fetch doctor name:', error.message);
+                // Continue with empty doctor_name if lookup fails
+            }
+
+            // Generate patient_id if not provided (same pattern as patientController.js)
+            const generatedPatientId = trimmedPatientId || uuidv4();
+
+            // Create minimal patient record
+            patient = new Patient({
+                patient_name: 'Unknown Patient', // Placeholder, will be updated when patient visits
+                patient_phone: trimmedPhone,
+                patient_id: generatedPatientId,
+                doctor_id: trimmedDoctorId,
+                doctor_name: resolvedDoctorName,
+                reports: [] // Initialize empty reports array
+            });
+
+            await patient.save();
+            console.log('Created new minimal patient record:', patient.patient_id, 'for phone:', trimmedPhone);
         }
         
         console.log('Patient found:', patient.patient_id, patient.patient_name, 'under doctor:', patient.doctor_id);
@@ -179,12 +216,25 @@ const getPatientReports = async (req, res) => {
             });
         }
 
+        // Build $or conditions only for non-empty values
+        const orConditions = [];
+        if (patient_id && patient_id.trim() !== '') {
+            orConditions.push({ patient_id: patient_id.trim() });
+        }
+        if (patient_phone && patient_phone.trim() !== '') {
+            orConditions.push({ patient_phone: patient_phone.trim() });
+        }
+        
+        if (orConditions.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Either patient_id or patient_phone must be provided and non-empty'
+            });
+        }
+
         const patient = await Patient.findOne({
-            doctor_id,
-            $or: [
-                { patient_id: patient_id || '' },
-                { patient_phone: patient_phone || '' }
-            ]
+            doctor_id: doctor_id.trim(),
+            $or: orConditions
         }).select('reports patient_id patient_name patient_phone');
 
         if (!patient) {
@@ -242,12 +292,25 @@ const deletePatientReport = async (req, res) => {
             });
         }
 
+        // Build $or conditions only for non-empty values
+        const orConditions = [];
+        if (patient_id && patient_id.trim() !== '') {
+            orConditions.push({ patient_id: patient_id.trim() });
+        }
+        if (patient_phone && patient_phone.trim() !== '') {
+            orConditions.push({ patient_phone: patient_phone.trim() });
+        }
+        
+        if (orConditions.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Either patient_id or patient_phone must be provided and non-empty'
+            });
+        }
+
         const patient = await Patient.findOne({
-            doctor_id,
-            $or: [
-                { patient_id: patient_id || '' },
-                { patient_phone: patient_phone || '' }
-            ]
+            doctor_id: doctor_id.trim(),
+            $or: orConditions
         });
 
         if (!patient) {
