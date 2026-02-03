@@ -1,47 +1,47 @@
 const mongoose = require('mongoose');
 
 const doctorSchema = new mongoose.Schema({
-    doctor_id: { 
-        type: String, 
-        required: true, 
-        unique: true 
+    doctor_id: {
+        type: String,
+        required: true,
+        unique: true
     },
-    name: { 
-        type: String, 
-        default: "" 
+    name: {
+        type: String,
+        default: ""
     },
-    email: { 
-        type: String, 
-        default: "" 
+    email: {
+        type: String,
+        default: ""
     },
     settings: {
-        receiptHeader: { 
-            type: String, 
-            default: "" 
+        receiptHeader: {
+            type: String,
+            default: ""
         },
-        receiptFooter: { 
-            type: String, 
-            default: "" 
+        receiptFooter: {
+            type: String,
+            default: ""
         },
-        clinicName: { 
-            type: String, 
-            default: "" 
+        clinicName: {
+            type: String,
+            default: ""
         },
-        doctorTitle: { 
-            type: String, 
-            default: "" 
+        doctorTitle: {
+            type: String,
+            default: ""
         },
-        clinicAddress: { 
-            type: String, 
-            default: "" 
+        clinicAddress: {
+            type: String,
+            default: ""
         },
-        clinicPhone: { 
-            type: String, 
-            default: "" 
+        clinicPhone: {
+            type: String,
+            default: ""
         },
-        logoUrl: { 
-            type: String, 
-            default: "" 
+        logoUrl: {
+            type: String,
+            default: ""
         },
         // Consultation fees (كشف)
         consultationFee: {
@@ -52,15 +52,25 @@ const doctorSchema = new mongoose.Schema({
         revisitFee: {
             type: Number,
             default: 0
+        },
+        // Print Settings
+        printSettings: {
+            paperSize: { type: String, default: 'a4' },
+            marginTop: { type: Number, default: 0 },
+            showHeader: { type: Boolean, default: true },
+            showFooter: { type: Boolean, default: true },
+            showPatientInfo: { type: Boolean, default: true },
+            customPaperWidth: Number,
+            customPaperHeight: Number
         }
     },
-    createdAt: { 
-        type: Date, 
-        default: Date.now 
+    createdAt: {
+        type: Date,
+        default: Date.now
     },
-    updatedAt: { 
-        type: Date, 
-        default: Date.now 
+    updatedAt: {
+        type: Date,
+        default: Date.now
     }
 });
 
