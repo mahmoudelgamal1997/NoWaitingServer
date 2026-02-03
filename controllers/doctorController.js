@@ -4,7 +4,7 @@ const Doctor = require('../models/doctor');
 const updateDoctorSettings = async (req, res) => {
     try {
         const { doctor_id } = req.params;
-        
+
         // Validate doctor_id
         if (!doctor_id) {
             return res.status(400).json({ message: 'Doctor ID is required' });
@@ -19,7 +19,8 @@ const updateDoctorSettings = async (req, res) => {
             clinicPhone,
             logoUrl,
             consultationFee,
-            revisitFee
+            revisitFee,
+            printSettings
         } = req.body;
 
         // Find the doctor document or create if it doesn't exist
@@ -38,7 +39,14 @@ const updateDoctorSettings = async (req, res) => {
                     clinicPhone: clinicPhone !== undefined ? clinicPhone : '',
                     logoUrl: logoUrl !== undefined ? logoUrl : '',
                     consultationFee: consultationFee !== undefined ? consultationFee : 0,
-                    revisitFee: revisitFee !== undefined ? revisitFee : 0
+                    revisitFee: revisitFee !== undefined ? revisitFee : 0,
+                    printSettings: printSettings || {
+                        paperSize: 'a4',
+                        marginTop: 0,
+                        showHeader: true,
+                        showFooter: true,
+                        showPatientInfo: true
+                    }
                 },
                 updatedAt: new Date()
             });
@@ -56,7 +64,14 @@ const updateDoctorSettings = async (req, res) => {
                 clinicPhone: clinicPhone !== undefined ? clinicPhone : doctor.settings.clinicPhone,
                 logoUrl: logoUrl !== undefined ? logoUrl : doctor.settings.logoUrl,
                 consultationFee: consultationFee !== undefined ? consultationFee : (doctor.settings.consultationFee || 0),
-                revisitFee: revisitFee !== undefined ? revisitFee : (doctor.settings.revisitFee || 0)
+                revisitFee: revisitFee !== undefined ? revisitFee : (doctor.settings.revisitFee || 0),
+                printSettings: printSettings !== undefined ? printSettings : (doctor.settings.printSettings || {
+                    paperSize: 'a4',
+                    marginTop: 0,
+                    showHeader: true,
+                    showFooter: true,
+                    showPatientInfo: true
+                })
             };
             doctor.updatedAt = new Date();
             await doctor.save();
@@ -79,7 +94,7 @@ const updateDoctorSettings = async (req, res) => {
 const getDoctorSettings = async (req, res) => {
     try {
         const { doctor_id } = req.params;
-        
+
         // Validate doctor_id
         if (!doctor_id) {
             return res.status(400).json({ message: 'Doctor ID is required' });
@@ -89,7 +104,7 @@ const getDoctorSettings = async (req, res) => {
         const doctor = await Doctor.findOne({ doctor_id });
 
         if (!doctor) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 message: 'Doctor settings not found',
                 // Return default empty settings so frontend doesn't break
                 settings: {
@@ -101,7 +116,14 @@ const getDoctorSettings = async (req, res) => {
                     clinicPhone: "",
                     logoUrl: "",
                     consultationFee: 0,
-                    revisitFee: 0
+                    revisitFee: 0,
+                    printSettings: {
+                        paperSize: 'a4',
+                        marginTop: 0,
+                        showHeader: true,
+                        showFooter: true,
+                        showPatientInfo: true
+                    }
                 }
             });
         }
