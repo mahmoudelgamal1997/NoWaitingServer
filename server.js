@@ -13,6 +13,7 @@ const reportRoutes = require('./routes/reportRoutes');
 const serviceRoutes = require('./routes/serviceRoutes');
 const billingRoutes = require('./routes/billingRoutes');
 const analyticsRoutes = require('./routes/analyticsRoutes');
+const inventoryRoutes = require('./routes/inventoryRoutes');
 
 const cors = require('cors');
 
@@ -30,7 +31,7 @@ app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
+
     const allowedOrigins = [
       'https://drwaiting-30f56.web.app',
       'https://drwaiting-30f56.firebaseapp.com',
@@ -43,12 +44,12 @@ app.use(cors({
       'http://127.0.0.1:3001',
       'http://127.0.0.1:3006',
     ];
-    
+
     // Allow all localhost origins for development
     if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
       return callback(null, true);
     }
-    
+
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -59,10 +60,10 @@ app.use(cors({
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
-    'Origin', 
-    'X-Requested-With', 
+    'Content-Type',
+    'Authorization',
+    'Origin',
+    'X-Requested-With',
     'Accept',
     'Cache-Control',   // Added for cache-busting
     'Pragma',          // Added for cache-busting
@@ -89,6 +90,7 @@ app.use('/api', reportRoutes);
 app.use('/api', serviceRoutes);
 app.use('/api', billingRoutes);
 app.use('/api', analyticsRoutes);
+app.use('/api', inventoryRoutes);
 
 // Error handling middleware - must be after routes
 app.use((err, req, res, next) => {
@@ -96,7 +98,7 @@ app.use((err, req, res, next) => {
   console.error('Error stack:', err.stack);
   console.error('Request URL:', req.url);
   console.error('Request method:', req.method);
-  
+
   // Handle multer errors
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
@@ -110,7 +112,7 @@ app.use((err, req, res, next) => {
       message: `Upload error: ${err.message}`
     });
   }
-  
+
   // Handle other errors
   res.status(err.status || 500).json({
     success: false,
@@ -122,5 +124,5 @@ app.use((err, req, res, next) => {
 // Start the server
 const PORT = process.env.PORT || 6000;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
+  console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
 });
