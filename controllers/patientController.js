@@ -32,7 +32,7 @@ const savePatient = async (req, res) => {
             assistant_id = ""
         } = req.body;
 
-        
+
         // Validation for required doctor_id
         if (!doctor_id) {
             return res.status(400).json({ message: 'Doctor ID is required' });
@@ -53,9 +53,9 @@ const savePatient = async (req, res) => {
         }
 
         // Check if patient with same phone number and doctor_id already exists
-        let existingPatient = await Patient.findOne({ 
-            patient_phone, 
-            doctor_id 
+        let existingPatient = await Patient.findOne({
+            patient_phone,
+            doctor_id
         });
 
         if (existingPatient) {
@@ -75,11 +75,11 @@ const savePatient = async (req, res) => {
 
             // Add the new visit to the patient's visits array
             existingPatient.visits.push(newVisit);
-            
+
             // Update patient status and position if provided
             if (status) existingPatient.status = status;
             if (position) existingPatient.position = position;
-            
+
             // Update other patient info if provided (might have changed)
             if (patient_name) existingPatient.patient_name = patient_name;
             if (age) existingPatient.age = age;
@@ -106,10 +106,10 @@ const savePatient = async (req, res) => {
                 const doctor = await Doctor.findOne({ doctor_id });
                 if (doctor && doctor.settings) {
                     const isRevisit = (visit_type === 'اعاده كشف' || visit_type === 'إعادة كشف');
-                    const consultationFee = isRevisit 
-                        ? (doctor.settings.revisitFee || 0) 
+                    const consultationFee = isRevisit
+                        ? (doctor.settings.revisitFee || 0)
                         : (doctor.settings.consultationFee || 0);
-                    
+
                     if (consultationFee > 0) {
                         const billing = new Billing({
                             billing_id: uuidv4(),
@@ -189,10 +189,10 @@ const savePatient = async (req, res) => {
             const doctor = await Doctor.findOne({ doctor_id });
             if (doctor && doctor.settings) {
                 const isRevisit = (visit_type === 'اعاده كشف' || visit_type === 'إعادة كشف');
-                const consultationFee = isRevisit 
-                    ? (doctor.settings.revisitFee || 0) 
+                const consultationFee = isRevisit
+                    ? (doctor.settings.revisitFee || 0)
                     : (doctor.settings.consultationFee || 0);
-                
+
                 if (consultationFee > 0) {
                     const billing = new Billing({
                         billing_id: uuidv4(),
@@ -224,16 +224,16 @@ const savePatient = async (req, res) => {
             // Don't fail the patient save if billing fails
         }
 
-        res.status(201).json({ 
-            message: 'New patient created successfully', 
-            patient: newPatient 
+        res.status(201).json({
+            message: 'New patient created successfully',
+            patient: newPatient
         });
     } catch (error) {
         console.error('Error saving patient:', error);
-        
-        res.status(500).json({ 
-            message: 'Error saving patient', 
-            error: error.message 
+
+        res.status(500).json({
+            message: 'Error saving patient',
+            error: error.message
         });
     }
 };
@@ -242,7 +242,7 @@ const savePatient = async (req, res) => {
 const getPatientsByDoctor = async (req, res) => {
     try {
         const { doctor_id } = req.params;
-        
+
         // Validate doctor_id
         if (!doctor_id) {
             return res.status(400).json({ message: 'Doctor ID is required' });
@@ -295,12 +295,12 @@ const getPatientsByDoctor = async (req, res) => {
 
         // Check if pagination is requested
         const usePagination = page !== undefined || limit !== undefined;
-        
+
         // IMPORTANT: For proper merging by phone number, we need to fetch all patients first
         // then merge, then paginate. This ensures accurate grouping.
         // Fetch all matching patients first
         let allPatients = await Patient.find(queryFilter).sort(sortObject);
-        
+
         // Determine the max date for filtering visits
         // If endDate is provided, use it; otherwise use today
         let maxDateForVisits;
@@ -312,7 +312,7 @@ const getPatientsByDoctor = async (req, res) => {
             maxDateForVisits.setHours(23, 59, 59, 999); // Include today
         }
         const maxDateStr = maxDateForVisits.toISOString().split('T')[0]; // YYYY-MM-DD format
-        
+
         // Helper function to filter visits based on date range
         const filterVisitsByDate = (visits, maxDate = maxDateStr) => {
             if (!visits || !Array.isArray(visits)) return [];
@@ -326,7 +326,7 @@ const getPatientsByDoctor = async (req, res) => {
                     } else {
                         visitDate = new Date(visit.date);
                     }
-                    
+
                     // Check if date is valid
                     if (isNaN(visitDate.getTime())) {
                         console.warn('Invalid visit date:', visit.date);
@@ -334,7 +334,7 @@ const getPatientsByDoctor = async (req, res) => {
                     }
                     visitDate.setHours(0, 0, 0, 0);
                     const visitDateStr = visitDate.toISOString().split('T')[0];
-                    
+
                     // Apply startDate filter if provided
                     if (startDate) {
                         const startDateStr = startDate.split('T')[0];
@@ -342,7 +342,7 @@ const getPatientsByDoctor = async (req, res) => {
                             return false; // Filter out visits before startDate
                         }
                     }
-                    
+
                     // Only include visits up to maxDate (endDate if provided, or today)
                     const isFuture = visitDateStr > maxDate;
                     if (isFuture) {
@@ -356,42 +356,42 @@ const getPatientsByDoctor = async (req, res) => {
             });
             return filtered;
         };
-        
+
         // Group patients by phone number and merge visits
         // This ensures patients with same phone number are treated as one user
         const patientsMap = new Map();
-        
+
         allPatients.forEach(patient => {
             const phoneKey = patient.patient_phone;
-            
+
             // Filter visits based on date range
             const filteredVisits = filterVisitsByDate(patient.visits || []);
-            
+
             if (patientsMap.has(phoneKey)) {
                 // Merge with existing patient record
                 const existingPatient = patientsMap.get(phoneKey);
-                
+
                 // Ensure existingPatient.visits is an array
                 if (!existingPatient.visits || !Array.isArray(existingPatient.visits)) {
                     existingPatient.visits = [];
                 }
-                
+
                 // Merge visits - combine all visits from both records (already filtered)
                 const existingFilteredVisits = filterVisitsByDate(existingPatient.visits || []);
                 const allVisits = [...(existingFilteredVisits || []), ...(filteredVisits || [])];
-                
+
                 // Sort visits by date (newest first)
                 allVisits.sort((a, b) => {
                     const dateA = new Date(a.date || a.time || 0);
                     const dateB = new Date(b.date || b.time || 0);
                     return dateB - dateA;
                 });
-                
+
                 // Update existing patient with merged data
                 // Keep the most recent patient info (name, age, address, etc.)
                 const existingDate = new Date(existingPatient.date || existingPatient.createdAt || 0);
                 const newDate = new Date(patient.date || patient.createdAt || 0);
-                
+
                 if (newDate > existingDate) {
                     // Newer patient record - update info but keep merged visits
                     existingPatient.patient_name = patient.patient_name || existingPatient.patient_name;
@@ -403,7 +403,7 @@ const getPatientsByDoctor = async (req, res) => {
                     existingPatient.date = patient.date || existingPatient.date;
                     existingPatient.time = patient.time || existingPatient.time;
                 }
-                
+
                 // Update visits with merged list
                 existingPatient.visits = allVisits;
             } else {
@@ -420,10 +420,10 @@ const getPatientsByDoctor = async (req, res) => {
                 patientsMap.set(phoneKey, patientObj);
             }
         });
-        
+
         // Convert map back to array
         let mergedPatients = Array.from(patientsMap.values());
-        
+
         // Re-sort merged patients based on sortBy parameter
         if (sortBy === 'date') {
             mergedPatients.sort((a, b) => {
@@ -438,7 +438,7 @@ const getPatientsByDoctor = async (req, res) => {
                 return sortOrder === 'asc' ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
             });
         }
-        
+
         // Now apply pagination to merged results
         let patients;
         let totalCount = mergedPatients.length;
@@ -497,10 +497,10 @@ const getPatientsByDoctor = async (req, res) => {
         res.json(response);
     } catch (error) {
         console.error('Error retrieving patients:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
-            message: 'Error retrieving patients', 
-            error: error.message 
+            message: 'Error retrieving patients',
+            error: error.message
         });
     }
 };
@@ -514,9 +514,9 @@ const getPatientsByDoctor = async (req, res) => {
 // Example: GET /api/patients (returns all patients)
 const getAllPatients = async (req, res) => {
     try {
-        const { 
-            doctor_id, 
-            clinic_id, 
+        const {
+            doctor_id,
+            clinic_id,
             assistant_id,
             startDate,
             endDate,
@@ -525,41 +525,41 @@ const getAllPatients = async (req, res) => {
             sortBy = 'createdAt',
             sortOrder = 'desc'
         } = req.query;
-        
+
         // Build filter object - only include filters that are provided (strict matching)
         const filter = {};
-        
+
         if (doctor_id) {
             filter.doctor_id = doctor_id;
         }
-        
+
         // Strict filtering - only match exact clinic_id (no empty values)
         if (clinic_id) {
             filter.clinic_id = clinic_id;
         }
-        
+
         // Strict filtering - only match exact assistant_id (no empty values)
         if (assistant_id) {
             filter.assistant_id = assistant_id;
         }
-        
+
         // Add date filtering - filter by createdAt (Date field) for reliable date comparison
         if (startDate || endDate) {
             filter.createdAt = {};
-            
+
             if (startDate) {
                 const start = new Date(startDate);
                 start.setHours(0, 0, 0, 0);
                 filter.createdAt.$gte = start;
             }
-            
+
             if (endDate) {
                 const end = new Date(endDate);
                 end.setHours(23, 59, 59, 999);
                 filter.createdAt.$lte = end;
             }
         }
-        
+
         // Build sort object based on sortBy parameter
         // Match mobile API behavior: use createdAt/updatedAt (Date fields) for proper sorting
         // The 'date' field is a string and doesn't sort correctly, so use createdAt instead
@@ -577,26 +577,26 @@ const getAllPatients = async (req, res) => {
         }
         console.log('Sort object:', sortObject);
         console.log('Filter object:', filter);
-        
+
         // Handle pagination
         let patients;
         let totalCount;
         let paginationInfo = null;
-        
+
         if (page !== undefined || limit !== undefined) {
             const pageNum = parseInt(page) || 1;
             const limitNum = parseInt(limit) || 20;
             const skip = (pageNum - 1) * limitNum;
-            
+
             // Get total count for pagination
             totalCount = await Patient.countDocuments(filter);
-            
+
             // Fetch paginated results
             patients = await Patient.find(filter)
                 .sort(sortObject)
                 .skip(skip)
                 .limit(limitNum);
-            
+
             // Build pagination info
             const totalPages = Math.ceil(totalCount / limitNum);
             paginationInfo = {
@@ -614,7 +614,7 @@ const getAllPatients = async (req, res) => {
             patients = await Patient.find(filter).sort(sortObject);
             totalCount = patients.length;
         }
-        
+
         res.status(200).json({
             success: true,
             message: 'Patients retrieved successfully',
@@ -633,10 +633,10 @@ const getAllPatients = async (req, res) => {
         });
     } catch (error) {
         console.error('Error retrieving patients:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
-            message: 'Error retrieving patients', 
-            error: error.message 
+            message: 'Error retrieving patients',
+            error: error.message
         });
     }
 };
@@ -677,11 +677,11 @@ const updatePatient = async (req, res) => {
         };
 
         let visitIndex = -1;
-        
+
         // Find which visit to update - with improved visit finding logic
         if (visit_id && patient.visits.length > 0) {
             visitIndex = patient.visits.findIndex(v => v.visit_id === visit_id);
-            
+
             if (visitIndex === -1) {
                 // If visit not found by ID but was provided, return error
                 return res.status(404).json({ message: 'Visit not found' });
@@ -706,22 +706,25 @@ const updatePatient = async (req, res) => {
 
         // Update the visit with the new receipt and complaint/diagnosis if provided
         if (visitIndex >= 0) {
-            // Only push new receipt if there are drugs to add
+            // Always push the receipt, even if drugs array is empty (for inventory-only receipts)
+            patient.visits[visitIndex].receipts.push(newReceipt);
+
+            // Update receipt string for backward compatibility only if drugs exist
             if (drugs && drugs.length > 0) {
-                patient.visits[visitIndex].receipts.push(newReceipt);
-            
-                // Update receipt string for backward compatibility
                 const receiptString = drugs.map(drug =>
                     `الدواء: ${drug.drug} | التكرار: ${drug.frequency} | المدة: ${drug.period} | التوقيت: ${drug.timing}`
                 ).join(' || ');
                 patient.receipt = receiptString;
+            } else {
+                // If no drugs, set receipt to indicate inventory-only or notes-only
+                patient.receipt = notes || "روشتة بدون أدوية";
             }
-            
+
             // Update complaint and diagnosis if provided
             if (complaint !== undefined) {
                 patient.visits[visitIndex].complaint = complaint;
             }
-            
+
             if (diagnosis !== undefined) {
                 patient.visits[visitIndex].diagnosis = diagnosis;
             }
@@ -746,7 +749,7 @@ const updatePatient = async (req, res) => {
 const getPatientByIdOrPhone = async (req, res) => {
     try {
         const { identifier, doctor_id } = req.params;
-        
+
         // Validate doctor_id
         if (!doctor_id) {
             return res.status(400).json({ message: 'Doctor ID is required' });
@@ -759,7 +762,7 @@ const getPatientByIdOrPhone = async (req, res) => {
                 { $or: [{ patient_phone: identifier }, { patient_id: identifier }] }
             ]
         });
-        
+
         if (!patient) {
             return res.status(404).json({ message: 'Patient not found' });
         }
@@ -777,10 +780,10 @@ const getPatientByIdOrPhone = async (req, res) => {
     }
 };
 
-module.exports = { 
-    savePatient, 
-    getAllPatients, 
-    getPatientsByDoctor, 
+module.exports = {
+    savePatient,
+    getAllPatients,
+    getPatientsByDoctor,
     updatePatient,
     getPatientByIdOrPhone
 };
