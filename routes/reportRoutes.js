@@ -3,6 +3,7 @@ const router = express.Router();
 const upload = require('../config/upload');
 const {
     uploadPatientReport,
+    uploadPatientReportFromUrls,
     getPatientReports,
     deletePatientReport
 } = require('../controllers/reportController');
@@ -49,6 +50,15 @@ router.post('/patients/reports/upload',
     upload.array('images', 10),
     handleMulterError,
     uploadPatientReport
+);
+
+// Upload patient report(s) from Firebase Storage URLs
+// POST /api/patients/reports/upload-urls
+// Body: JSON with fields: patient_id, patient_phone, doctor_id, image_urls[], description, uploaded_by
+// Used by mobile apps that upload directly to Firebase Storage
+router.post('/patients/reports/upload-urls', 
+    authenticateUser, 
+    uploadPatientReportFromUrls
 );
 
 // Get patient reports
