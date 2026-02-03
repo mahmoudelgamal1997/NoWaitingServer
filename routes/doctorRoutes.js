@@ -13,6 +13,8 @@ const authenticateUser = (req, res, next) => {
 router.get('/doctors/:doctor_id/settings', authenticateUser, getDoctorSettings);
 
 // Route to update doctor settings
+// Route to update doctor settings - supporting both PUT and POST for compatibility
 router.put('/doctors/:doctor_id/settings', authenticateUser, updateDoctorSettings);
+router.post('/doctors/:doctor_id/settings', authenticateUser, updateDoctorSettings);
 
 module.exports = router;
