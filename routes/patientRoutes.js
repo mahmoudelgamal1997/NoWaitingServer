@@ -1,18 +1,18 @@
 const express = require('express');
-const router = express.Router();
-const { 
-    savePatient, 
-    getAllPatients, 
+const {
+    savePatient,
+    getAllPatients,
     getPatientsByDoctor,
     getPatientByIdOrPhone,
-    updatePatient 
+    updatePatient,
+    updatePatientVisitType
 } = require('../controllers/patientController');
-const { 
-    createPatientVisit, 
-    getPatientVisitHistory, 
+const {
+    createPatientVisit,
+    getPatientVisitHistory,
     updatePatientVisit,
     getVisitDetails,
-    deleteVisit 
+    deleteVisit
 } = require('../controllers/visitController');
 
 // Middleware to verify authentication - example (implement your actual auth middleware)
@@ -30,6 +30,7 @@ router.get('/patients/doctor/:doctor_id', authenticateUser, getPatientsByDoctor)
 router.get('/patients', authenticateUser, getAllPatients);
 router.get('/patients/:identifier/doctor/:doctor_id', authenticateUser, getPatientByIdOrPhone);
 router.put('/patients/:id', authenticateUser, updatePatient);
+router.put('/patients/:patient_id/visit-type', authenticateUser, updatePatientVisitType);
 
 // Visit-related routes
 router.post('/patients/visits', authenticateUser, createPatientVisit);

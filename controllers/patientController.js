@@ -2,6 +2,7 @@ const Patient = require('../models/patient');
 const Doctor = require('../models/doctor');
 const Billing = require('../models/billing');
 const ExternalServiceRequest = require('../models/externalServiceRequest');
+const VisitTypeConfiguration = require('../models/VisitTypeConfiguration');
 const { v4: uuidv4 } = require('uuid');
 
 // Save patient data or add a new visit if patient already exists
@@ -864,10 +865,159 @@ const getPatientByIdOrPhone = async (req, res) => {
     }
 };
 
+/**
+ * Update patient visit type and urgency
+ * Automatically updates billing if applicable
+ */
+const updatePatientVisitType = async (req, res) => {
+    try {
+        const { patient_id } = req.params;
+        const { visit_type, visit_urgency, doctor_id, changed_by, reason } = req.body;
+
+        if (!patient_id || !visit_type || !doctor_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'Patient ID, Visit Type, and Doctor ID are required'
+            });
+        }
+
+        // 1. Get patient current data
+        const patient = await Patient.findOne({ patient_id });
+        if (!patient) {
+            return res.status(404).json({
+                success: false,
+                message: 'Patient not found'
+            });
+        }
+
+        // 2. Get visit type configuration to calculate new price
+        const config = await VisitTypeConfiguration.findOne({ doctor_id });
+
+        let newPrice = 0;
+        let visitTypeName = visit_type;
+
+        // Default prices if no configuration found
+        const DEFAULT_PRICES = {
+            'visit': { normal: 500, urgent: 700 },
+            'revisit': { normal: 200, urgent: 300 },
+            'other': { normal: 0, urgent: 0 }
+        };
+
+        if (config) {
+            const typeConfig = config.visit_types.find(vt => vt.type_id === visit_type || vt.name === visit_type || vt.name_ar === visit_type);
+            if (typeConfig) {
+                newPrice = visit_urgency === 'urgent' ? typeConfig.urgent_price : typeConfig.normal_price;
+                visitTypeName = typeConfig.name; // Use English name for consistency
+            } else {
+                // Fallback to default logic
+                const defaults = DEFAULT_PRICES[visit_type.toLowerCase()] || DEFAULT_PRICES['other'];
+                newPrice = visit_urgency === 'urgent' ? defaults.urgent : defaults.normal;
+            }
+        } else {
+            // Fallback to default logic
+            const defaults = DEFAULT_PRICES[visit_type.toLowerCase()] || DEFAULT_PRICES['other'];
+            newPrice = visit_urgency === 'urgent' ? defaults.urgent : defaults.normal;
+        }
+
+        // 3. Update billing if it exists and is not fully paid (or even if paid, to adjust)
+        // Find the most recent billing for this patient/visit
+        // Assuming the billing relates to the current visit type (consultation)
+
+        // We look for a billing where consultationFee > 0
+        const billing = await Billing.findOne({
+            patient_id,
+            doctor_id,
+        }).sort({ createdAt: -1 });
+
+        let oldPrice = 0;
+
+        if (billing) {
+            oldPrice = billing.consultationFee;
+
+            // Only update if price is different
+            if (oldPrice !== newPrice) {
+                // Calculate new total
+                // We need to keep other services intact
+                const servicesTotal = billing.servicesTotal || 0;
+                let discountAmount = 0;
+
+                // Recalculate discount if it exists
+                if (billing.discount && billing.discount.value > 0) {
+                    if (billing.discount.type === 'percentage') {
+                        discountAmount = ((servicesTotal + newPrice) * billing.discount.value) / 100;
+                    } else {
+                        discountAmount = billing.discount.value;
+                    }
+                }
+
+                const newTotalAmount = Math.max(0, (servicesTotal + newPrice) - discountAmount);
+
+                // Update billing
+                billing.consultationFee = newPrice;
+                billing.totalAmount = newTotalAmount;
+                billing.consultationType = visit_type;
+
+                // If paid amount equals old total, update paid amount to new total? 
+                // Only if it was fully paid before.
+                // But safer to leave assessment to the user or mark as pending if price increased.
+                if (billing.paymentStatus === 'paid' && newTotalAmount > billing.amountPaid) {
+                    billing.paymentStatus = 'partial';
+                }
+
+                billing.updatedAt = Date.now();
+                await billing.save();
+            }
+        }
+
+        // 4. Save change history
+        if (!patient.visit_type_change_history) {
+            patient.visit_type_change_history = [];
+        }
+
+        patient.visit_type_change_history.push({
+            from_type: patient.visit_type,
+            to_type: visit_type,
+            from_urgency: patient.visit_urgency || 'normal',
+            to_urgency: visit_urgency || 'normal',
+            old_price: oldPrice,
+            new_price: newPrice,
+            changed_by: changed_by || 'doctor',
+            changed_at: new Date(),
+            reason: reason || 'Updated from dashboard'
+        });
+
+        // 5. Update patient record
+        patient.visit_type = visit_type; // Store ID/Code or Name? Ideally ID, but system uses names currently.
+        patient.visit_urgency = visit_urgency || 'normal';
+        patient.visit_type_changed = true;
+
+        await patient.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Visit type updated successfully',
+            data: {
+                patient,
+                newPrice,
+                billingUpdated: !!billing
+            }
+        });
+
+    } catch (error) {
+        console.error('Error updating visit type:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error updating visit type',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     savePatient,
     getAllPatients,
     getPatientsByDoctor,
     updatePatient,
-    getPatientByIdOrPhone
+    getPatientByIdOrPhone,
+    updatePatientVisitType
 };
