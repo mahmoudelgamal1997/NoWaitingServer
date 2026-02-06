@@ -17,9 +17,9 @@ const patientMedicalHistorySchema = new mongoose.Schema({
     },
     // The actual form data - stored as key-value pairs (all strings)
     // Key format: "section_id.field_id"
+    // Using Mixed instead of Map to support keys with dots
     data: {
-        type: Map,
-        of: String,
+        type: mongoose.Schema.Types.Mixed,
         default: {}
     },
     // Snapshot of the template structure used at the time of entry
