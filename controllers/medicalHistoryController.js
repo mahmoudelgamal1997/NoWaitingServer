@@ -235,15 +235,13 @@ const savePatientHistory = async (req, res) => {
             });
         }
 
-        // Convert plain object to Map for MongoDB
-        const dataMap = new Map(Object.entries(data));
-
-        // Create new history record (append-only)
+        // Mongoose will automatically convert the plain object to a Map
+        // No need to manually create a Map
         const historyRecord = new PatientMedicalHistory({
             patient_id,
             doctor_id,
             patient_name: patient_name || '',
-            data: dataMap,
+            data,  // Pass plain object, Mongoose handles Map conversion
             template_snapshot,
             recorded_by: recorded_by || '',
             notes: notes || ''
