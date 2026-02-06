@@ -124,6 +124,33 @@ const patientSchema = new mongoose.Schema({
         type: String,
         default: "كشف"
     },
+    visit_urgency: {
+        type: String,
+        enum: ['normal', 'urgent'],
+        default: 'normal'
+    },
+    original_visit_type: {
+        type: String,
+        default: ""
+    },
+    visit_type_changed: {
+        type: Boolean,
+        default: false
+    },
+    visit_type_change_history: [{
+        from_type: String,
+        to_type: String,
+        from_urgency: String,
+        to_urgency: String,
+        old_price: Number,
+        new_price: Number,
+        changed_by: String,
+        changed_at: {
+            type: Date,
+            default: Date.now
+        },
+        reason: String
+    }],
     receipt: {
         type: String,
         default: ""
