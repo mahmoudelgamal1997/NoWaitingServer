@@ -1,6 +1,7 @@
 const Patient = require('../models/patient');
 const Doctor = require('../models/doctor');
 const Billing = require('../models/billing');
+const ExternalServiceRequest = require('../models/externalServiceRequest');
 const { v4: uuidv4 } = require('uuid');
 
 // Save patient data or add a new visit if patient already exists
@@ -470,11 +471,33 @@ const getPatientsByDoctor = async (req, res) => {
             patients = mergedPatients;
         }
 
+        // Fetch external service request counts for the current doctor
+        const requestCounts = await ExternalServiceRequest.aggregate([
+            { $match: { doctor_id: doctor_id } },
+            { $group: { _id: '$patient_id', count: { $sum: 1 } } }
+        ]);
+
+        // Create a map for quick lookup
+        const countMap = new Map();
+        requestCounts.forEach(item => {
+            countMap.set(item._id, item.count);
+        });
+
+        // Add count to patients array
+        // We need to handle both mongoose documents and plain objects
+        const patientsWithCounts = patients.map(p => {
+            const patientObj = (p.toObject && typeof p.toObject === 'function') ? p.toObject() : p;
+            return {
+                ...patientObj,
+                externalServiceRequestCount: countMap.get(patientObj.patient_id) || 0
+            };
+        });
+
         // Build response
         const response = {
             success: true,
             message: 'Patients retrieved successfully',
-            data: patients,
+            data: patientsWithCounts,
             totalItems: totalCount
         };
 
@@ -615,10 +638,35 @@ const getAllPatients = async (req, res) => {
             totalCount = patients.length;
         }
 
+        // Fetch external service request counts for patients
+        // Only if doctor_id is specified (for performance)
+        let patientsWithCounts = patients;
+        if (doctor_id) {
+            const requestCounts = await ExternalServiceRequest.aggregate([
+                { $match: { doctor_id: doctor_id } },
+                { $group: { _id: '$patient_id', count: { $sum: 1 } } }
+            ]);
+
+            // Create a map for quick lookup
+            const countMap = new Map();
+            requestCounts.forEach(item => {
+                countMap.set(item._id, item.count);
+            });
+
+            // Add count to patients array
+            patientsWithCounts = patients.map(p => {
+                const patientObj = (p.toObject && typeof p.toObject === 'function') ? p.toObject() : p;
+                return {
+                    ...patientObj,
+                    externalServiceRequestCount: countMap.get(patientObj.patient_id) || 0
+                };
+            });
+        }
+
         res.status(200).json({
             success: true,
             message: 'Patients retrieved successfully',
-            data: patients,
+            data: patientsWithCounts,
             totalItems: totalCount,
             pagination: paginationInfo,
             filters: {
