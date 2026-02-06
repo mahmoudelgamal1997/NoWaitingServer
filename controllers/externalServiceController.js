@@ -300,10 +300,36 @@ exports.getReports = async (req, res) => {
 
         // Date filtering
         if (startDate || endDate) {
-            matchFilter.createdAt = {};
-            if (startDate) matchFilter.createdAt.$gte = new Date(startDate);
-            if (endDate) matchFilter.createdAt.$lte = new Date(endDate);
+            matchFilter.requestedAt = {};
+            if (startDate) {
+                const start = new Date(startDate);
+                start.setHours(0, 0, 0, 0);
+                matchFilter.requestedAt.$gte = start;
+                console.log('Filtering from date:', start);
+            }
+            if (endDate) {
+                const end = new Date(endDate);
+                end.setHours(23, 59, 59, 999);
+                matchFilter.requestedAt.$lte = end;
+                console.log('Filtering to date:', end);
+            }
         }
+
+        console.log('Match filter:', JSON.stringify(matchFilter, null, 2));
+
+        // Get sample data to debug dates
+        const sampleRequests = await ExternalServiceRequest.find({ doctor_id: doctorId })
+            .limit(5)
+            .sort({ createdAt: -1 });
+
+        console.log('Sample requests (latest 5):');
+        sampleRequests.forEach(req => {
+            console.log(`  - ${req.service_name}: requestedAt=${req.requestedAt}, createdAt=${req.createdAt}`);
+        });
+
+        // Count matching documents
+        const matchCount = await ExternalServiceRequest.countDocuments(matchFilter);
+        console.log(`Total matching requests: ${matchCount}`);
 
         // Status filtering
         if (status) {
@@ -346,6 +372,27 @@ exports.getReports = async (req, res) => {
             { $sort: { count: -1 } }
         ]);
 
+        // Aggregate by both Service and Provider (Detailed)
+        const detailedStats = await ExternalServiceRequest.aggregate([
+            { $match: matchFilter },
+            {
+                $group: {
+                    _id: {
+                        service: '$service_name',
+                        provider: '$provider_name'
+                    },
+                    count: { $sum: 1 },
+                    completed: {
+                        $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] }
+                    },
+                    pending: {
+                        $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] }
+                    }
+                }
+            },
+            { $sort: { '_id.service': 1, '_id.provider': 1 } }
+        ]);
+
         // Overall stats
         const totalRequests = await ExternalServiceRequest.countDocuments(matchFilter);
         const completedRequests = await ExternalServiceRequest.countDocuments({
@@ -373,6 +420,13 @@ exports.getReports = async (req, res) => {
                 })),
                 byServiceType: byServiceType.map(item => ({
                     serviceType: item._id,
+                    total: item.count,
+                    completed: item.completed,
+                    pending: item.pending
+                })),
+                detailedStats: detailedStats.map(item => ({
+                    serviceName: item._id.service,
+                    providerName: item._id.provider,
                     total: item.count,
                     completed: item.completed,
                     pending: item.pending
