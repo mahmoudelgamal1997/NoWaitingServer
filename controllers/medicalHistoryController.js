@@ -134,6 +134,11 @@ const getPatientHistory = async (req, res) => {
             });
         }
 
+        // Convert Map to plain object for frontend
+        if (latestHistory.data && latestHistory.data instanceof Map) {
+            latestHistory.data = Object.fromEntries(latestHistory.data);
+        }
+
         res.status(200).json({
             success: true,
             message: 'History retrieved successfully',
@@ -179,10 +184,18 @@ const getPatientHistoryTimeline = async (req, res) => {
 
         const totalPages = Math.ceil(totalRecords / limitNum);
 
+        // Convert Map to plain object for frontend
+        const processedRecords = historyRecords.map(record => {
+            if (record.data && record.data instanceof Map) {
+                record.data = Object.fromEntries(record.data);
+            }
+            return record;
+        });
+
         res.status(200).json({
             success: true,
             message: 'History timeline retrieved successfully',
-            data: historyRecords,
+            data: processedRecords,
             pagination: {
                 currentPage: pageNum,
                 totalPages,
@@ -222,12 +235,15 @@ const savePatientHistory = async (req, res) => {
             });
         }
 
+        // Convert plain object to Map for MongoDB
+        const dataMap = new Map(Object.entries(data));
+
         // Create new history record (append-only)
         const historyRecord = new PatientMedicalHistory({
             patient_id,
             doctor_id,
             patient_name: patient_name || '',
-            data,
+            data: dataMap,
             template_snapshot,
             recorded_by: recorded_by || '',
             notes: notes || ''
