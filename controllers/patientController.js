@@ -471,25 +471,43 @@ const getPatientsByDoctor = async (req, res) => {
             patients = mergedPatients;
         }
 
-        // Fetch external service request counts for the current doctor
-        const requestCounts = await ExternalServiceRequest.aggregate([
+        // Fetch external service request details for the current doctor
+        const serviceRequests = await ExternalServiceRequest.aggregate([
             { $match: { doctor_id: doctor_id } },
-            { $group: { _id: '$patient_id', count: { $sum: 1 } } }
+            {
+                $group: {
+                    _id: '$patient_id',
+                    count: { $sum: 1 },
+                    services: {
+                        $push: {
+                            service_name: '$service_name',
+                            provider_name: '$provider_name',
+                            status: '$status',
+                            requestedAt: '$requestedAt'
+                        }
+                    }
+                }
+            }
         ]);
 
         // Create a map for quick lookup
-        const countMap = new Map();
-        requestCounts.forEach(item => {
-            countMap.set(item._id, item.count);
+        const servicesMap = new Map();
+        serviceRequests.forEach(item => {
+            servicesMap.set(item._id, {
+                count: item.count,
+                services: item.services
+            });
         });
 
-        // Add count to patients array
+        // Add service details to patients array
         // We need to handle both mongoose documents and plain objects
         const patientsWithCounts = patients.map(p => {
             const patientObj = (p.toObject && typeof p.toObject === 'function') ? p.toObject() : p;
+            const serviceData = servicesMap.get(patientObj.patient_id);
             return {
                 ...patientObj,
-                externalServiceRequestCount: countMap.get(patientObj.patient_id) || 0
+                externalServiceRequestCount: serviceData?.count || 0,
+                externalServiceRequests: serviceData?.services || []
             };
         });
 
@@ -642,23 +660,41 @@ const getAllPatients = async (req, res) => {
         // Only if doctor_id is specified (for performance)
         let patientsWithCounts = patients;
         if (doctor_id) {
-            const requestCounts = await ExternalServiceRequest.aggregate([
+            const serviceRequests = await ExternalServiceRequest.aggregate([
                 { $match: { doctor_id: doctor_id } },
-                { $group: { _id: '$patient_id', count: { $sum: 1 } } }
+                {
+                    $group: {
+                        _id: '$patient_id',
+                        count: { $sum: 1 },
+                        services: {
+                            $push: {
+                                service_name: '$service_name',
+                                provider_name: '$provider_name',
+                                status: '$status',
+                                requestedAt: '$requestedAt'
+                            }
+                        }
+                    }
+                }
             ]);
 
             // Create a map for quick lookup
-            const countMap = new Map();
-            requestCounts.forEach(item => {
-                countMap.set(item._id, item.count);
+            const servicesMap = new Map();
+            serviceRequests.forEach(item => {
+                servicesMap.set(item._id, {
+                    count: item.count,
+                    services: item.services
+                });
             });
 
-            // Add count to patients array
+            // Add service details to patients array
             patientsWithCounts = patients.map(p => {
                 const patientObj = (p.toObject && typeof p.toObject === 'function') ? p.toObject() : p;
+                const serviceData = servicesMap.get(patientObj.patient_id);
                 return {
                     ...patientObj,
-                    externalServiceRequestCount: countMap.get(patientObj.patient_id) || 0
+                    externalServiceRequestCount: serviceData?.count || 0,
+                    externalServiceRequests: serviceData?.services || []
                 };
             });
         }
