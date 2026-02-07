@@ -890,40 +890,64 @@ const updatePatientVisitType = async (req, res) => {
             });
         }
 
-        // 2. Get visit type configuration to calculate new price
+        // 2. Determine new price
+        // Priority 1: Doctor Settings (Simple mode - used by Dashboard)
+        // Priority 2: Visit Type Configuration (Advanced mode)
+        // Priority 3: Defaults
+
+        const doctor = await Doctor.findOne({ doctor_id });
         const config = await VisitTypeConfiguration.findOne({ doctor_id });
 
         let newPrice = 0;
         let visitTypeName = visit_type;
+        let priceFound = false;
 
         // Default prices if no configuration found
         const DEFAULT_PRICES = {
             'visit': { normal: 500, urgent: 700 },
             'revisit': { normal: 200, urgent: 300 },
+            'consultation': { normal: 150, urgent: 250 },
             'other': { normal: 0, urgent: 0 }
         };
 
-        if (config) {
+        // Check Doctor Settings first (This is what Dashboard Settings saves to)
+        if (doctor && doctor.settings) {
+            const normalizedType = visit_type.toLowerCase().trim();
+
+            // Map types to settings fields
+            if (['visit', 'كشف', 'examination', 'kashf'].includes(normalizedType)) {
+                newPrice = doctor.settings.consultationFee || 0;
+                visitTypeName = 'Visit'; // Standardize name
+                priceFound = true;
+            } else if (['revisit', 're-visit', 'اعاده كشف', 'إعادة كشف', 'revisit fee', 'eada'].includes(normalizedType)) {
+                newPrice = doctor.settings.revisitFee || 0;
+                visitTypeName = 'Re-visit';
+                priceFound = true;
+            } else if (['consultation', 'estishara', 'استشارة', 'استشاره'].includes(normalizedType)) {
+                newPrice = doctor.settings.estisharaFee || 0;
+                visitTypeName = 'Consultation';
+                priceFound = true;
+            }
+        }
+
+        // If not found in simple settings, check Advanced Configuration
+        if (!priceFound && config) {
             const typeConfig = config.visit_types.find(vt => vt.type_id === visit_type || vt.name === visit_type || vt.name_ar === visit_type);
             if (typeConfig) {
                 newPrice = visit_urgency === 'urgent' ? typeConfig.urgent_price : typeConfig.normal_price;
                 visitTypeName = typeConfig.name; // Use English name for consistency
-            } else {
-                // Fallback to default logic
-                const defaults = DEFAULT_PRICES[visit_type.toLowerCase()] || DEFAULT_PRICES['other'];
-                newPrice = visit_urgency === 'urgent' ? defaults.urgent : defaults.normal;
+                priceFound = true;
             }
-        } else {
-            // Fallback to default logic
+        }
+
+        // If still not found, use Defaults
+        if (!priceFound) {
             const defaults = DEFAULT_PRICES[visit_type.toLowerCase()] || DEFAULT_PRICES['other'];
             newPrice = visit_urgency === 'urgent' ? defaults.urgent : defaults.normal;
         }
 
         // 3. Update billing if it exists and is not fully paid (or even if paid, to adjust)
-        // Find the most recent billing for this patient/visit
-        // Assuming the billing relates to the current visit type (consultation)
-
-        // We look for a billing where consultationFee > 0
+        // Find the most recent billing for this patient
         const billing = await Billing.findOne({
             patient_id,
             doctor_id,
@@ -934,8 +958,8 @@ const updatePatientVisitType = async (req, res) => {
         if (billing) {
             oldPrice = billing.consultationFee;
 
-            // Only update if price is different
-            if (oldPrice !== newPrice) {
+            // Only update if price is different or type changed
+            if (oldPrice !== newPrice || billing.consultationType !== visitTypeName) {
                 // Calculate new total
                 // We need to keep other services intact
                 const servicesTotal = billing.servicesTotal || 0;
@@ -955,7 +979,7 @@ const updatePatientVisitType = async (req, res) => {
                 // Update billing
                 billing.consultationFee = newPrice;
                 billing.totalAmount = newTotalAmount;
-                billing.consultationType = visit_type;
+                billing.consultationType = visitTypeName || visit_type;
 
                 // If paid amount equals old total, update paid amount to new total? 
                 // Only if it was fully paid before.
@@ -987,7 +1011,7 @@ const updatePatientVisitType = async (req, res) => {
         });
 
         // 5. Update patient record
-        patient.visit_type = visit_type; // Store ID/Code or Name? Ideally ID, but system uses names currently.
+        patient.visit_type = visit_type; // Keep original ID/Value as requested
         patient.visit_urgency = visit_urgency || 'normal';
         patient.visit_type_changed = true;
 
