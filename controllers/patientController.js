@@ -1015,6 +1015,14 @@ const updatePatientVisitType = async (req, res) => {
         patient.visit_urgency = visit_urgency || 'normal';
         patient.visit_type_changed = true;
 
+        // NEW: Sync the visit_type to the latest visit in the history array
+        if (patient.visits && patient.visits.length > 0) {
+            // Sort by date descending to find the latest visit
+            patient.visits.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+            // Update the latest visit
+            patient.visits[0].visit_type = visit_type;
+        }
+
         await patient.save();
 
         res.status(200).json({
