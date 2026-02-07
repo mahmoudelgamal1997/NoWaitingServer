@@ -57,18 +57,19 @@ const updateDoctorSettings = async (req, res) => {
             // Update existing doctor settings
             // Important: use checking against undefined, not the || operator
             // This allows empty strings and 0 values to be set intentionally
+            const currentSettings = doctor.settings || {};
             doctor.settings = {
-                receiptHeader: receiptHeader !== undefined ? receiptHeader : doctor.settings.receiptHeader,
-                receiptFooter: receiptFooter !== undefined ? receiptFooter : doctor.settings.receiptFooter,
-                clinicName: clinicName !== undefined ? clinicName : doctor.settings.clinicName,
-                doctorTitle: doctorTitle !== undefined ? doctorTitle : doctor.settings.doctorTitle,
-                clinicAddress: clinicAddress !== undefined ? clinicAddress : doctor.settings.clinicAddress,
-                clinicPhone: clinicPhone !== undefined ? clinicPhone : doctor.settings.clinicPhone,
-                logoUrl: logoUrl !== undefined ? logoUrl : doctor.settings.logoUrl,
-                consultationFee: consultationFee !== undefined ? consultationFee : (doctor.settings.consultationFee || 0),
-                revisitFee: revisitFee !== undefined ? revisitFee : (doctor.settings.revisitFee || 0),
-                estisharaFee: estisharaFee !== undefined ? estisharaFee : (doctor.settings.estisharaFee || 0),
-                printSettings: printSettings !== undefined ? printSettings : (doctor.settings.printSettings || {
+                receiptHeader: receiptHeader !== undefined ? receiptHeader : (currentSettings.receiptHeader || ''),
+                receiptFooter: receiptFooter !== undefined ? receiptFooter : (currentSettings.receiptFooter || ''),
+                clinicName: clinicName !== undefined ? clinicName : (currentSettings.clinicName || ''),
+                doctorTitle: doctorTitle !== undefined ? doctorTitle : (currentSettings.doctorTitle || ''),
+                clinicAddress: clinicAddress !== undefined ? clinicAddress : (currentSettings.clinicAddress || ''),
+                clinicPhone: clinicPhone !== undefined ? clinicPhone : (currentSettings.clinicPhone || ''),
+                logoUrl: logoUrl !== undefined ? logoUrl : (currentSettings.logoUrl || ''),
+                consultationFee: consultationFee !== undefined ? consultationFee : (currentSettings.consultationFee || 0),
+                revisitFee: revisitFee !== undefined ? revisitFee : (currentSettings.revisitFee || 0),
+                estisharaFee: estisharaFee !== undefined ? estisharaFee : (currentSettings.estisharaFee || 0),
+                printSettings: printSettings !== undefined ? printSettings : (currentSettings.printSettings || {
                     paperSize: 'a4',
                     marginTop: 0,
                     showHeader: true,
