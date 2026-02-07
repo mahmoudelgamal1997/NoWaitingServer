@@ -951,6 +951,8 @@ const updatePatientVisitType = async (req, res) => {
         const billing = await Billing.findOne({
             patient_id,
             doctor_id,
+            // Exclude service-only bills to ensure we update the consultation bill
+            consultationType: { $nin: ['خدمات إضافية', 'Additional Services', 'services'] }
         }).sort({ createdAt: -1 });
 
         let oldPrice = 0;
@@ -1031,6 +1033,8 @@ const updatePatientVisitType = async (req, res) => {
             data: {
                 patient,
                 newPrice,
+                oldPrice,
+                priceDifference: newPrice - oldPrice,
                 billingUpdated: !!billing
             }
         });
