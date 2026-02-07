@@ -21,13 +21,22 @@ const DEFAULT_VISIT_TYPES = [
         order: 2
     },
     {
+        type_id: 'consultation',
+        name: 'Consultation',
+        name_ar: 'استشارة',
+        normal_price: 150,
+        urgent_price: 250,
+        is_active: true,
+        order: 3
+    },
+    {
         type_id: 'other',
         name: 'Other',
         name_ar: 'أخرى',
         normal_price: 0,
         urgent_price: 0,
         is_active: true,
-        order: 3
+        order: 4
     }
 ];
 
@@ -60,6 +69,15 @@ const getVisitTypeConfiguration = async (req, res) => {
                     isDefault: true
                 }
             });
+        }
+
+        // Merge defaults: ensure 'consultation' exists if missing in saved config
+        const hasConsultation = config.visit_types.some(vt => vt.type_id === 'consultation');
+        if (!hasConsultation) {
+            const consultationDefault = DEFAULT_VISIT_TYPES.find(vt => vt.type_id === 'consultation');
+            // Insert it at correct position (order 3) if possible, or just push
+            // We'll simplisticly push it
+            config.visit_types.push(consultationDefault);
         }
 
         res.status(200).json({
