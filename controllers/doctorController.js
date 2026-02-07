@@ -90,7 +90,6 @@ const updateDoctorSettings = async (req, res) => {
     }
 };
 
-// Get doctor settings
 const getDoctorSettings = async (req, res) => {
     try {
         const { doctor_id } = req.params;
@@ -102,6 +101,12 @@ const getDoctorSettings = async (req, res) => {
 
         // Find the doctor
         const doctor = await Doctor.findOne({ doctor_id });
+
+        // Also fetch visit types configuration to include in response
+        // This helps frontend apps that expect all configuration in one place
+        const VisitTypeConfiguration = require('../models/VisitTypeConfiguration');
+        const visitTypeConfig = await VisitTypeConfiguration.findOne({ doctor_id });
+        const visitTypes = visitTypeConfig ? visitTypeConfig.visit_types : null;
 
         if (!doctor) {
             return res.status(404).json({
@@ -123,14 +128,21 @@ const getDoctorSettings = async (req, res) => {
                         showHeader: true,
                         showFooter: true,
                         showPatientInfo: true
-                    }
+                    },
+                    visitTypes: visitTypes || [] // Include defaults/found types even if doctor settings missing
                 }
             });
         }
 
+        // Convert to plain object to allow adding property
+        const settingsObj = doctor.settings.toObject ? doctor.settings.toObject() : doctor.settings;
+
         res.status(200).json({
             message: 'Doctor settings retrieved successfully',
-            settings: doctor.settings
+            settings: {
+                ...settingsObj,
+                visitTypes: visitTypes || []
+            }
         });
     } catch (error) {
         console.error('Error retrieving doctor settings:', error);
