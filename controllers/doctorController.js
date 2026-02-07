@@ -55,28 +55,34 @@ const updateDoctorSettings = async (req, res) => {
             await doctor.save();
         } else {
             // Update existing doctor settings
-            // Important: use checking against undefined, not the || operator
-            // This allows empty strings and 0 values to be set intentionally
-            const currentSettings = doctor.settings || {};
-            doctor.settings = {
-                receiptHeader: receiptHeader !== undefined ? receiptHeader : (currentSettings.receiptHeader || ''),
-                receiptFooter: receiptFooter !== undefined ? receiptFooter : (currentSettings.receiptFooter || ''),
-                clinicName: clinicName !== undefined ? clinicName : (currentSettings.clinicName || ''),
-                doctorTitle: doctorTitle !== undefined ? doctorTitle : (currentSettings.doctorTitle || ''),
-                clinicAddress: clinicAddress !== undefined ? clinicAddress : (currentSettings.clinicAddress || ''),
-                clinicPhone: clinicPhone !== undefined ? clinicPhone : (currentSettings.clinicPhone || ''),
-                logoUrl: logoUrl !== undefined ? logoUrl : (currentSettings.logoUrl || ''),
-                consultationFee: consultationFee !== undefined ? consultationFee : (currentSettings.consultationFee || 0),
-                revisitFee: revisitFee !== undefined ? revisitFee : (currentSettings.revisitFee || 0),
-                estisharaFee: estisharaFee !== undefined ? estisharaFee : (currentSettings.estisharaFee || 0),
-                printSettings: printSettings !== undefined ? printSettings : (currentSettings.printSettings || {
+            if (!doctor.settings) {
+                doctor.settings = {};
+            }
+
+            if (receiptHeader !== undefined) doctor.settings.receiptHeader = receiptHeader;
+            if (receiptFooter !== undefined) doctor.settings.receiptFooter = receiptFooter;
+            if (clinicName !== undefined) doctor.settings.clinicName = clinicName;
+            if (doctorTitle !== undefined) doctor.settings.doctorTitle = doctorTitle;
+            if (clinicAddress !== undefined) doctor.settings.clinicAddress = clinicAddress;
+            if (clinicPhone !== undefined) doctor.settings.clinicPhone = clinicPhone;
+            if (logoUrl !== undefined) doctor.settings.logoUrl = logoUrl;
+
+            if (consultationFee !== undefined) doctor.settings.consultationFee = consultationFee;
+            if (revisitFee !== undefined) doctor.settings.revisitFee = revisitFee;
+            if (estisharaFee !== undefined) doctor.settings.estisharaFee = estisharaFee;
+
+            if (printSettings !== undefined) {
+                doctor.settings.printSettings = printSettings;
+            } else if (!doctor.settings.printSettings) {
+                doctor.settings.printSettings = {
                     paperSize: 'a4',
                     marginTop: 0,
                     showHeader: true,
                     showFooter: true,
                     showPatientInfo: true
-                })
-            };
+                };
+            }
+
             doctor.updatedAt = new Date();
             await doctor.save();
         }
