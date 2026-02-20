@@ -58,6 +58,11 @@ const doctorSchema = new mongoose.Schema({
             type: Number,
             default: 0
         },
+        // Urgent/Fast fee (سريع / مستعجل)
+        urgentFee: {
+            type: Number,
+            default: 0
+        },
         // Print Settings
         printSettings: {
             paperSize: { type: String, default: 'a4' },

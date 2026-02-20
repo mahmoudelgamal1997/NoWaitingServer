@@ -21,6 +21,7 @@ const updateDoctorSettings = async (req, res) => {
             consultationFee,
             revisitFee,
             estisharaFee,
+            urgentFee,
             printSettings
         } = req.body;
 
@@ -42,6 +43,7 @@ const updateDoctorSettings = async (req, res) => {
                     consultationFee: consultationFee !== undefined ? consultationFee : 0,
                     revisitFee: revisitFee !== undefined ? revisitFee : 0,
                     estisharaFee: estisharaFee !== undefined ? estisharaFee : 0,
+                    urgentFee: urgentFee !== undefined ? urgentFee : 0,
                     printSettings: printSettings || {
                         paperSize: 'a4',
                         marginTop: 0,
@@ -70,6 +72,7 @@ const updateDoctorSettings = async (req, res) => {
             if (consultationFee !== undefined) doctor.settings.consultationFee = consultationFee;
             if (revisitFee !== undefined) doctor.settings.revisitFee = revisitFee;
             if (estisharaFee !== undefined) doctor.settings.estisharaFee = estisharaFee;
+            if (urgentFee !== undefined) doctor.settings.urgentFee = urgentFee;
 
             if (printSettings !== undefined) {
                 doctor.settings.printSettings = printSettings;
@@ -133,6 +136,7 @@ const getDoctorSettings = async (req, res) => {
                     consultationFee: 0,
                     revisitFee: 0,
                     estisharaFee: 0,
+                    urgentFee: 0,
                     printSettings: {
                         paperSize: 'a4',
                         marginTop: 0,
