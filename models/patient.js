@@ -1,5 +1,36 @@
 const mongoose = require('mongoose');
 
+const medicalReportSchema = new mongoose.Schema({
+    report_id: {
+        type: String,
+        default: () => require('uuid').v4()
+    },
+    diagnosis: {
+        type: String,
+        default: ""
+    },
+    medical_report: {
+        type: String,
+        default: ""
+    },
+    signature: {
+        type: String,
+        default: ""
+    },
+    doctor_id: {
+        type: String,
+        default: ""
+    },
+    doctor_name: {
+        type: String,
+        default: ""
+    },
+    date: {
+        type: Date,
+        default: Date.now
+    }
+}, { _id: false });
+
 const drugSchema = new mongoose.Schema({
     drug: {
         type: String,
@@ -186,6 +217,10 @@ const patientSchema = new mongoose.Schema({
     assistant_id: {
         type: String,
         default: ""
+    },
+    medical_reports: {
+        type: [medicalReportSchema],
+        default: []
     },
     reports: [{
         report_id: {

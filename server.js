@@ -18,6 +18,7 @@ const dataResetRoutes = require('./routes/dataResetRoutes');
 const externalServiceRoutes = require('./routes/externalServiceRoutes');
 const medicalHistoryRoutes = require('./routes/medicalHistoryRoutes');
 const visitTypeRoutes = require('./routes/visitTypeRoutes');
+const medicalReportRoutes = require('./routes/medicalReportRoutes');
 
 const cors = require('cors');
 
@@ -99,6 +100,7 @@ app.use('/api', dataResetRoutes);
 app.use('/api/external-services', externalServiceRoutes);
 app.use('/api', medicalHistoryRoutes);
 app.use('/api/visit-types', visitTypeRoutes);
+app.use('/api', medicalReportRoutes);
 
 // Error handling middleware - must be after routes
 app.use((err, req, res, next) => {
