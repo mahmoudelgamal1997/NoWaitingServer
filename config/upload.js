@@ -29,15 +29,17 @@ const storage = multer.diskStorage({
     }
 });
 
-// File filter - only allow images
+// File filter - allow images and PDFs
 const fileFilter = (req, file, cb) => {
-    // Accept images only
-    const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'];
-    
+    const allowedMimes = [
+        'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp',
+        'application/pdf'
+    ];
+
     if (allowedMimes.includes(file.mimetype)) {
         cb(null, true);
     } else {
-        cb(new Error('Invalid file type. Only image files are allowed.'), false);
+        cb(new Error('Invalid file type. Only image files and PDFs are allowed.'), false);
     }
 };
 
