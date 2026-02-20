@@ -63,6 +63,11 @@ const doctorSchema = new mongoose.Schema({
             type: Number,
             default: 0
         },
+        // Referral sources (how patients heard about the doctor)
+        referralSources: {
+            type: [String],
+            default: []
+        },
         // Print Settings
         printSettings: {
             paperSize: { type: String, default: 'a4' },
