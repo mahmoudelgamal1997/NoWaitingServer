@@ -75,7 +75,10 @@ const updateDoctorSettings = async (req, res) => {
             if (revisitFee !== undefined) doctor.settings.revisitFee = revisitFee;
             if (estisharaFee !== undefined) doctor.settings.estisharaFee = estisharaFee;
             if (urgentFee !== undefined) doctor.settings.urgentFee = urgentFee;
-            if (referralSources !== undefined) doctor.settings.referralSources = referralSources;
+            if (referralSources !== undefined) {
+                doctor.settings.referralSources = referralSources;
+                doctor.markModified('settings.referralSources');
+            }
 
             if (printSettings !== undefined) {
                 doctor.settings.printSettings = printSettings;
