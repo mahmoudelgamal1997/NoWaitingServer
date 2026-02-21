@@ -1,6 +1,7 @@
 const HistoryTemplate = require('../models/HistoryTemplate');
 const PatientMedicalHistory = require('../models/PatientMedicalHistory');
 const defaultTemplate = require('../config/defaultHistoryTemplate');
+const { translateTemplate } = require('../utils/translateTemplate'); // kept as safety net for any future Arabic templates
 
 /**
  * Get or create template for a doctor
@@ -37,7 +38,7 @@ const getTemplate = async (req, res) => {
         res.status(200).json({
             success: true,
             message: 'Template retrieved successfully',
-            data: template
+            data: translateTemplate(template)
         });
     } catch (error) {
         console.error('Error getting template:', error);
@@ -137,7 +138,10 @@ const getPatientHistory = async (req, res) => {
         res.status(200).json({
             success: true,
             message: 'History retrieved successfully',
-            data: latestHistory
+            data: {
+                ...latestHistory,
+                template_snapshot: translateTemplate(latestHistory.template_snapshot)
+            }
         });
     } catch (error) {
         console.error('Error getting patient history:', error);
@@ -182,7 +186,10 @@ const getPatientHistoryTimeline = async (req, res) => {
         res.status(200).json({
             success: true,
             message: 'History timeline retrieved successfully',
-            data: historyRecords,
+            data: historyRecords.map(record => ({
+                ...record,
+                template_snapshot: translateTemplate(record.template_snapshot)
+            })),
             pagination: {
                 currentPage: pageNum,
                 totalPages,
