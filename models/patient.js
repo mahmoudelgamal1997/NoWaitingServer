@@ -218,6 +218,11 @@ const patientSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
+    file_number: {
+        type: String,
+        default: null,
+        index: true
+    },
     medical_reports: {
         type: [medicalReportSchema],
         default: []

@@ -5,6 +5,20 @@ const ExternalServiceRequest = require('../models/externalServiceRequest');
 const VisitTypeConfiguration = require('../models/VisitTypeConfiguration');
 const { v4: uuidv4 } = require('uuid');
 
+// Generate a unique 5-digit file number not already used in the collection
+const generateFileNumber = async () => {
+    let fileNumber;
+    let attempts = 0;
+    do {
+        fileNumber = String(Math.floor(10000 + Math.random() * 90000));
+        const exists = await Patient.findOne({ file_number: fileNumber }).lean();
+        if (!exists) return fileNumber;
+        attempts++;
+    } while (attempts < 20);
+    // Extremely unlikely, but fall back to a timestamped value
+    return String(Date.now()).slice(-5);
+};
+
 // Save patient data or add a new visit if patient already exists
 const savePatient = async (req, res) => {
     try {
@@ -151,11 +165,13 @@ const savePatient = async (req, res) => {
         }
 
         // If patient doesn't exist, create a new patient
+        const newFileNumber = await generateFileNumber();
         const newPatient = new Patient({
             patient_name,
             patient_phone,
             patient_id: patient_id || uuidv4(), // Generate patient_id if not provided
             doctor_id,
+            file_number: newFileNumber,
             doctor_name: resolvedDoctorName || doctor_name || '',
             date,
             time,
@@ -274,11 +290,12 @@ const getPatientsByDoctor = async (req, res) => {
         // Patients should be returned regardless of their date field if they match doctor_id
         // Date filtering on patient records is deprecated - use visit date filtering instead
 
-        // Build search filter for patient name or phone
+        // Build search filter for patient name, phone, or file number
         if (search) {
             queryFilter.$or = [
                 { patient_name: { $regex: search, $options: 'i' } },
-                { patient_phone: { $regex: search, $options: 'i' } }
+                { patient_phone: { $regex: search, $options: 'i' } },
+                { file_number: { $regex: search, $options: 'i' } }
             ];
         }
 
