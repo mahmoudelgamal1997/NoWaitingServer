@@ -582,7 +582,8 @@ const getAllPatients = async (req, res) => {
             page,
             limit,
             sortBy = 'createdAt',
-            sortOrder = 'desc'
+            sortOrder = 'desc',
+            search
         } = req.query;
 
         // Build filter object - only include filters that are provided (strict matching)
@@ -600,6 +601,15 @@ const getAllPatients = async (req, res) => {
         // Strict filtering - only match exact assistant_id (no empty values)
         if (assistant_id) {
             filter.assistant_id = assistant_id;
+        }
+
+        // Search by name, phone, or file number
+        if (search) {
+            filter.$or = [
+                { patient_name: { $regex: search, $options: 'i' } },
+                { patient_phone: { $regex: search, $options: 'i' } },
+                { file_number: { $regex: search, $options: 'i' } }
+            ];
         }
 
         // Add date filtering - filter by createdAt (Date field) for reliable date comparison
