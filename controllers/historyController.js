@@ -1,6 +1,13 @@
 const Patient = require('../models/patient');
 const Doctor = require('../models/doctor');
 
+// Normalize Arabic numerals to Western digits so "١٢٣٤٥" matches file_number "12345"
+function normalizeSearchDigits(str) {
+    if (!str || typeof str !== 'string') return str;
+    const arabicToWestern = { '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9' };
+    return str.replace(/[٠-٩]/g, (c) => arabicToWestern[c] || c);
+}
+
 /**
  * Get comprehensive history with pagination
  * Returns all patients, visits, and related data with pagination support
@@ -49,11 +56,23 @@ const getAllHistory = async (req, res) => {
             }
         }
 
-        // Search filter (by patient name or phone)
+        // Search filter (by patient name, phone, or file number)
         if (search) {
+            const searchTrimmed = search.trim();
+            const searchNormalized = normalizeSearchDigits(searchTrimmed);
+            const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const fileOr = [
+                { file_number: searchTrimmed },
+                { file_number: searchNormalized },
+                { file_number: { $regex: escapeRegex(searchTrimmed), $options: 'i' } }
+            ];
+            if (/^\d+$/.test(searchNormalized)) {
+                fileOr.push({ file_number: parseInt(searchNormalized, 10) });
+            }
             query.$or = [
-                { patient_name: { $regex: search, $options: 'i' } },
-                { patient_phone: { $regex: search, $options: 'i' } }
+                { patient_name: { $regex: searchTrimmed, $options: 'i' } },
+                { patient_phone: { $regex: searchTrimmed, $options: 'i' } },
+                ...fileOr
             ];
         }
 
@@ -96,6 +115,7 @@ const getAllHistory = async (req, res) => {
                 patient_id: patient.patient_id,
                 patient_name: patient.patient_name,
                 patient_phone: patient.patient_phone,
+                file_number: patient.file_number || '',
                 age: patient.age || '',
                 address: patient.address || '',
                 doctor_id: patient.doctor_id,
@@ -285,9 +305,21 @@ const getAllVisits = async (req, res) => {
         let query = {};
         query.doctor_id = doctor_id;
         if (search) {
+            const searchTrimmed = (search || '').trim();
+            const searchNormalized = normalizeSearchDigits(searchTrimmed);
+            const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const fileOr = [
+                { file_number: searchTrimmed },
+                { file_number: searchNormalized },
+                { file_number: { $regex: escapeRegex(searchTrimmed), $options: 'i' } }
+            ];
+            if (/^\d+$/.test(searchNormalized)) {
+                fileOr.push({ file_number: parseInt(searchNormalized, 10) });
+            }
             query.$or = [
-                { patient_name: { $regex: search, $options: 'i' } },
-                { patient_phone: { $regex: search, $options: 'i' } }
+                { patient_name: { $regex: searchTrimmed, $options: 'i' } },
+                { patient_phone: { $regex: searchTrimmed, $options: 'i' } },
+                ...fileOr
             ];
         }
 

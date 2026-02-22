@@ -5,6 +5,34 @@ const ExternalServiceRequest = require('../models/externalServiceRequest');
 const VisitTypeConfiguration = require('../models/VisitTypeConfiguration');
 const { v4: uuidv4 } = require('uuid');
 
+/**
+ * Convert 12h "HH:MM AM/PM" to 24h "HH:MM" for API response.
+ * Dashboards that parse the hour as 24h and use (hour >= 12 ? 'PM' : 'AM') will then display correctly.
+ * Leaves other formats (e.g. already 24h "17:52") unchanged.
+ */
+function timeTo24hForResponse(timeStr) {
+    if (!timeStr || typeof timeStr !== 'string') return timeStr || '';
+    const trimmed = timeStr.trim();
+    const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (!match) return timeStr;
+    let hour = parseInt(match[1], 10);
+    const minute = match[2];
+    const period = (match[3] || '').toUpperCase();
+    if (period === 'PM' && hour !== 12) hour += 12;
+    if (period === 'AM' && hour === 12) hour = 0;
+    return `${String(hour).padStart(2, '0')}:${minute}`;
+}
+
+function normalizePatientTimeForResponse(p) {
+    const po = (p.toObject && typeof p.toObject === 'function') ? p.toObject() : p;
+    return {
+        ...po,
+        time: timeTo24hForResponse(po.time),
+        visits: (po.visits || []).map(v => ({ ...v, time: timeTo24hForResponse(v.time) })),
+        all_visits: (po.all_visits || []).map(v => ({ ...v, time: timeTo24hForResponse(v.time) }))
+    };
+}
+
 // Generate a unique 5-digit file number not already used in the collection
 const generateFileNumber = async () => {
     let fileNumber;
@@ -517,10 +545,9 @@ const getPatientsByDoctor = async (req, res) => {
             });
         });
 
-        // Add service details to patients array
-        // We need to handle both mongoose documents and plain objects
+        // Add service details and normalize time to 24h for correct dashboard AM/PM display
         const patientsWithCounts = patients.map(p => {
-            const patientObj = (p.toObject && typeof p.toObject === 'function') ? p.toObject() : p;
+            const patientObj = normalizePatientTimeForResponse(p);
             const serviceData = servicesMap.get(patientObj.patient_id);
             return {
                 ...patientObj,
@@ -715,9 +742,9 @@ const getAllPatients = async (req, res) => {
                 });
             });
 
-            // Add service details to patients array
+            // Add service details and normalize time to 24h for correct dashboard AM/PM display
             patientsWithCounts = patients.map(p => {
-                const patientObj = (p.toObject && typeof p.toObject === 'function') ? p.toObject() : p;
+                const patientObj = normalizePatientTimeForResponse(p);
                 const serviceData = servicesMap.get(patientObj.patient_id);
                 return {
                     ...patientObj,
@@ -725,6 +752,8 @@ const getAllPatients = async (req, res) => {
                     externalServiceRequests: serviceData?.services || []
                 };
             });
+        } else {
+            patientsWithCounts = patients.map(normalizePatientTimeForResponse);
         }
 
         res.status(200).json({

@@ -131,8 +131,23 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start the server
-const PORT = process.env.PORT || 6000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
-});
+// Start the server (try next port if default is in use)
+const PORT = parseInt(process.env.PORT, 10) || 6000;
+const maxAttempts = 6;
+
+function tryListen(port, attempt) {
+  const server = app.listen(port, '0.0.0.0', () => {
+    console.log(`🚀 Server running on http://0.0.0.0:${port}`);
+  });
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE' && attempt < maxAttempts) {
+      const nextPort = PORT + attempt;
+      console.log(`Port ${port} in use, trying ${nextPort}...`);
+      tryListen(nextPort, attempt + 1);
+    } else {
+      console.error(err);
+      process.exit(1);
+    }
+  });
+}
+tryListen(PORT, 1);
