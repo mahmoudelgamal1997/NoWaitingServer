@@ -112,7 +112,7 @@ const billingSchema = new mongoose.Schema({
     // Payment status
     paymentStatus: { 
         type: String, 
-        enum: ['pending', 'paid', 'partial', 'cancelled'], 
+        enum: ['pending', 'paid', 'partial', 'cancelled', 'refund_due'], 
         default: 'paid' 
     },
     paymentMethod: { 

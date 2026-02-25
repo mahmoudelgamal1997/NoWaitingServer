@@ -30,7 +30,15 @@ const getRevenueOverview = async (req, res) => {
             {
                 $group: {
                     _id: null,
-                    totalRevenue: { $sum: '$totalAmount' },
+                    totalRevenue: {
+                        $sum: {
+                            $cond: [
+                                { $eq: ['$paymentStatus', 'refund_due'] },
+                                { $multiply: ['$totalAmount', -1] },
+                                '$totalAmount'
+                            ]
+                        }
+                    },
                     totalConsultationFees: { $sum: '$consultationFee' },
                     totalServicesRevenue: { $sum: '$servicesTotal' },
                     totalDiscounts: { $sum: { $ifNull: ['$discount.amount', 0] } },
@@ -144,7 +152,15 @@ const getRevenueBreakdown = async (req, res) => {
             {
                 $group: {
                     _id: dateFormat,
-                    revenue: { $sum: '$totalAmount' },
+                    revenue: {
+                        $sum: {
+                            $cond: [
+                                { $eq: ['$paymentStatus', 'refund_due'] },
+                                { $multiply: ['$totalAmount', -1] },
+                                '$totalAmount'
+                            ]
+                        }
+                    },
                     consultationFees: { $sum: '$consultationFee' },
                     servicesRevenue: { $sum: '$servicesTotal' },
                     discounts: { $sum: { $ifNull: ['$discount.amount', 0] } },
@@ -294,7 +310,15 @@ const getClinicPerformance = async (req, res) => {
                 $group: {
                     _id: null,
                     totalVisits: { $sum: 1 },
-                    totalRevenue: { $sum: '$totalAmount' },
+                    totalRevenue: {
+                        $sum: {
+                            $cond: [
+                                { $eq: ['$paymentStatus', 'refund_due'] },
+                                { $multiply: ['$totalAmount', -1] },
+                                '$totalAmount'
+                            ]
+                        }
+                    },
                     totalConsultationFees: { $sum: '$consultationFee' },
                     totalServicesRevenue: { $sum: '$servicesTotal' },
                     totalDiscounts: { $sum: { $ifNull: ['$discount.amount', 0] } },

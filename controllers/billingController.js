@@ -20,7 +20,8 @@ const createBilling = async (req, res) => {
             paymentMethod,
             amountPaid,
             notes,
-            billingDate
+            billingDate,
+            billing_id: providedBillingId // Optional, e.g. for discount/refund to match Firestore
         } = req.body;
 
         // Validate required fields
@@ -64,7 +65,7 @@ const createBilling = async (req, res) => {
         const totalAmount = Math.max(0, subtotal - discountAmount);
 
         const billing = new Billing({
-            billing_id: uuidv4(),
+            billing_id: providedBillingId || uuidv4(),
             doctor_id,
             patient_id,
             patient_name,
