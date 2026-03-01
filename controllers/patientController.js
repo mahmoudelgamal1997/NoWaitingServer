@@ -73,7 +73,8 @@ const savePatient = async (req, res) => {
             user_uid = "",
             visit_speed = "",
             clinic_id = "",
-            assistant_id = ""
+            assistant_id = "",
+            file_number: providedFileNumber = ""
         } = req.body;
 
 
@@ -95,6 +96,8 @@ const savePatient = async (req, res) => {
                 // Continue with empty doctor_name if lookup fails
             }
         }
+
+        const trimmedFileNumber = (providedFileNumber || '').toString().trim();
 
         // Check if patient with same phone number and doctor_id already exists
         let existingPatient = await Patient.findOne({
@@ -192,8 +195,9 @@ const savePatient = async (req, res) => {
             });
         }
 
-        // If patient doesn't exist, create a new patient
-        const newFileNumber = await generateFileNumber();
+        // If patient doesn't exist, create a new patient.
+        // Prefer the file_number already assigned on the frontend; otherwise generate one.
+        const newFileNumber = trimmedFileNumber || await generateFileNumber();
         const newPatient = new Patient({
             patient_name,
             patient_phone,
@@ -1105,11 +1109,39 @@ const updatePatientVisitType = async (req, res) => {
     }
 };
 
+/**
+ * GET /api/patients/file-number?phone=&doctor_id=
+ * Returns the existing file_number for a patient (by phone + doctor),
+ * or generates and returns a new unique one — without creating any record.
+ */
+const getOrGenerateFileNumber = async (req, res) => {
+    try {
+        const { phone, doctor_id } = req.query;
+        if (!phone || !doctor_id) {
+            return res.status(400).json({ message: 'phone and doctor_id are required' });
+        }
+
+        // If patient already exists, return their file_number
+        const existing = await Patient.findOne({ patient_phone: phone, doctor_id }).lean();
+        if (existing && existing.file_number) {
+            return res.json({ file_number: existing.file_number, existing: true });
+        }
+
+        // Otherwise generate a fresh unique file_number (does not save anything)
+        const file_number = await generateFileNumber();
+        return res.json({ file_number, existing: false });
+    } catch (error) {
+        console.error('Error generating file number:', error);
+        res.status(500).json({ message: 'Error generating file number', error: error.message });
+    }
+};
+
 module.exports = {
     savePatient,
     getAllPatients,
     getPatientsByDoctor,
     updatePatient,
     getPatientByIdOrPhone,
-    updatePatientVisitType
+    updatePatientVisitType,
+    getOrGenerateFileNumber
 };

@@ -6,7 +6,8 @@ const {
     getPatientsByDoctor,
     getPatientByIdOrPhone,
     updatePatient,
-    updatePatientVisitType
+    updatePatientVisitType,
+    getOrGenerateFileNumber
 } = require('../controllers/patientController');
 const {
     createPatientVisit,
@@ -27,6 +28,7 @@ const authenticateUser = (req, res, next) => {
 
 // Patient routes
 router.post('/patients', authenticateUser, savePatient);
+router.get('/patients/file-number', authenticateUser, getOrGenerateFileNumber);
 router.get('/patients/doctor/:doctor_id', authenticateUser, getPatientsByDoctor);
 router.get('/patients', authenticateUser, getAllPatients);
 router.get('/patients/:identifier/doctor/:doctor_id', authenticateUser, getPatientByIdOrPhone);
