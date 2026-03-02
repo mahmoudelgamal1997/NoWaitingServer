@@ -47,6 +47,58 @@ const generateFileNumber = async () => {
     return String(Date.now()).slice(-5);
 };
 
+/**
+ * Resolve the consultation fee and display label for a given visit_type.
+ * Priority:
+ *   1. VisitTypeConfiguration (supports custom visit types added by doctor)
+ *   2. Doctor.settings (legacy simple-mode: consultationFee / revisitFee / estisharaFee)
+ *   3. 0 (no fee configured)
+ */
+const resolveVisitTypeFee = async (doctor_id, visit_type, visit_speed, doctor) => {
+    const isUrgent = visit_speed === 'سريع' || visit_speed === 'urgent';
+
+    // 1. Check VisitTypeConfiguration
+    try {
+        const vtConfig = await VisitTypeConfiguration.findOne({ doctor_id });
+        if (vtConfig && vtConfig.visit_types && vtConfig.visit_types.length > 0) {
+            const match = vtConfig.visit_types.find(
+                (vt) =>
+                    vt.is_active !== false &&
+                    (vt.type_id === visit_type ||
+                        vt.name_ar === visit_type ||
+                        vt.name === visit_type)
+            );
+            if (match) {
+                const fee = isUrgent
+                    ? (match.urgent_price || match.normal_price || 0)
+                    : (match.normal_price || 0);
+                if (fee > 0) {
+                    return { fee, type: match.name_ar || match.name };
+                }
+            }
+        }
+    } catch (err) {
+        console.warn('resolveVisitTypeFee: VisitTypeConfiguration lookup failed:', err.message);
+    }
+
+    // 2. Fall back to doctor settings (standard types)
+    if (doctor && doctor.settings) {
+        const isRevisit = visit_type === 'اعاده كشف' || visit_type === 'إعادة كشف';
+        const isEstishara = visit_type === 'استشارة';
+        let fee = 0;
+        if (isRevisit) {
+            fee = doctor.settings.revisitFee || 0;
+        } else if (isEstishara) {
+            fee = doctor.settings.estisharaFee || 0;
+        } else {
+            fee = doctor.settings.consultationFee || 0;
+        }
+        return { fee, type: visit_type || 'كشف' };
+    }
+
+    return { fee: 0, type: visit_type || 'كشف' };
+};
+
 // Save patient data or add a new visit if patient already exists
 const savePatient = async (req, res) => {
     try {
@@ -151,37 +203,33 @@ const savePatient = async (req, res) => {
             // Auto-record consultation fee if doctor has set fees
             try {
                 const doctor = await Doctor.findOne({ doctor_id });
-                if (doctor && doctor.settings) {
-                    const isRevisit = (visit_type === 'اعاده كشف' || visit_type === 'إعادة كشف');
-                    const consultationFee = isRevisit
-                        ? (doctor.settings.revisitFee || 0)
-                        : (doctor.settings.consultationFee || 0);
+                const { fee: consultationFee, type: consultationType } =
+                    await resolveVisitTypeFee(doctor_id, visit_type, visit_speed, doctor);
 
-                    if (consultationFee > 0) {
-                        const billing = new Billing({
-                            billing_id: uuidv4(),
-                            doctor_id,
-                            patient_id: existingPatient.patient_id,
-                            patient_name: existingPatient.patient_name,
-                            patient_phone: existingPatient.patient_phone || "",
-                            visit_id: visit_id,
-                            clinic_id: clinic_id || "",
-                            consultationFee: consultationFee,
-                            consultationType: isRevisit ? "اعاده كشف" : "كشف",
-                            services: [],
-                            servicesTotal: 0,
-                            subtotal: consultationFee,
-                            discount: null,
-                            totalAmount: consultationFee,
-                            paymentStatus: 'paid',
-                            paymentMethod: 'cash',
-                            amountPaid: consultationFee,
-                            notes: "Consultation fee - auto recorded on patient arrival",
-                            billingDate: new Date()
-                        });
-                        await billing.save();
-                        console.log(`Consultation fee ${consultationFee} EGP recorded for ${existingPatient.patient_name}`);
-                    }
+                if (consultationFee > 0) {
+                    const billing = new Billing({
+                        billing_id: uuidv4(),
+                        doctor_id,
+                        patient_id: existingPatient.patient_id,
+                        patient_name: existingPatient.patient_name,
+                        patient_phone: existingPatient.patient_phone || "",
+                        visit_id: visit_id,
+                        clinic_id: clinic_id || "",
+                        consultationFee: consultationFee,
+                        consultationType: consultationType,
+                        services: [],
+                        servicesTotal: 0,
+                        subtotal: consultationFee,
+                        discount: null,
+                        totalAmount: consultationFee,
+                        paymentStatus: 'paid',
+                        paymentMethod: 'cash',
+                        amountPaid: consultationFee,
+                        notes: "Consultation fee - auto recorded on patient arrival",
+                        billingDate: new Date()
+                    });
+                    await billing.save();
+                    console.log(`Consultation fee ${consultationFee} EGP (${consultationType}) recorded for ${existingPatient.patient_name}`);
                 }
             } catch (billingError) {
                 console.error('Error auto-recording consultation fee:', billingError);
@@ -237,37 +285,33 @@ const savePatient = async (req, res) => {
         // Auto-record consultation fee for new patient if doctor has set fees
         try {
             const doctor = await Doctor.findOne({ doctor_id });
-            if (doctor && doctor.settings) {
-                const isRevisit = (visit_type === 'اعاده كشف' || visit_type === 'إعادة كشف');
-                const consultationFee = isRevisit
-                    ? (doctor.settings.revisitFee || 0)
-                    : (doctor.settings.consultationFee || 0);
+            const { fee: consultationFee, type: consultationType } =
+                await resolveVisitTypeFee(doctor_id, visit_type, visit_speed, doctor);
 
-                if (consultationFee > 0) {
-                    const billing = new Billing({
-                        billing_id: uuidv4(),
-                        doctor_id,
-                        patient_id: newPatient.patient_id,
-                        patient_name: newPatient.patient_name,
-                        patient_phone: newPatient.patient_phone || "",
-                        visit_id: newPatient.visits[0]?.visit_id || "",
-                        clinic_id: clinic_id || "",
-                        consultationFee: consultationFee,
-                        consultationType: isRevisit ? "اعاده كشف" : "كشف",
-                        services: [],
-                        servicesTotal: 0,
-                        subtotal: consultationFee,
-                        discount: null,
-                        totalAmount: consultationFee,
-                        paymentStatus: 'paid',
-                        paymentMethod: 'cash',
-                        amountPaid: consultationFee,
-                        notes: "Consultation fee - auto recorded on patient arrival",
-                        billingDate: new Date()
-                    });
-                    await billing.save();
-                    console.log(`Consultation fee ${consultationFee} EGP recorded for new patient ${newPatient.patient_name}`);
-                }
+            if (consultationFee > 0) {
+                const billing = new Billing({
+                    billing_id: uuidv4(),
+                    doctor_id,
+                    patient_id: newPatient.patient_id,
+                    patient_name: newPatient.patient_name,
+                    patient_phone: newPatient.patient_phone || "",
+                    visit_id: newPatient.visits[0]?.visit_id || "",
+                    clinic_id: clinic_id || "",
+                    consultationFee: consultationFee,
+                    consultationType: consultationType,
+                    services: [],
+                    servicesTotal: 0,
+                    subtotal: consultationFee,
+                    discount: null,
+                    totalAmount: consultationFee,
+                    paymentStatus: 'paid',
+                    paymentMethod: 'cash',
+                    amountPaid: consultationFee,
+                    notes: "Consultation fee - auto recorded on patient arrival",
+                    billingDate: new Date()
+                });
+                await billing.save();
+                console.log(`Consultation fee ${consultationFee} EGP (${consultationType}) recorded for new patient ${newPatient.patient_name}`);
             }
         } catch (billingError) {
             console.error('Error auto-recording consultation fee for new patient:', billingError);
