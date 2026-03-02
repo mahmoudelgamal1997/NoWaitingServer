@@ -207,29 +207,42 @@ const savePatient = async (req, res) => {
                     await resolveVisitTypeFee(doctor_id, visit_type, visit_speed, doctor);
 
                 if (consultationFee > 0) {
-                    const billing = new Billing({
-                        billing_id: uuidv4(),
-                        doctor_id,
+                    // Deduplication guard: prevent double-billing from retries or multi-app processing.
+                    // Skip if a billing was already created for this patient+doctor in the last 5 minutes.
+                    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+                    const recentBilling = await Billing.findOne({
                         patient_id: existingPatient.patient_id,
-                        patient_name: existingPatient.patient_name,
-                        patient_phone: existingPatient.patient_phone || "",
-                        visit_id: visit_id,
-                        clinic_id: clinic_id || "",
-                        consultationFee: consultationFee,
-                        consultationType: consultationType,
-                        services: [],
-                        servicesTotal: 0,
-                        subtotal: consultationFee,
-                        discount: null,
-                        totalAmount: consultationFee,
-                        paymentStatus: 'paid',
-                        paymentMethod: 'cash',
-                        amountPaid: consultationFee,
-                        notes: "Consultation fee - auto recorded on patient arrival",
-                        billingDate: new Date()
+                        doctor_id,
+                        billingDate: { $gte: fiveMinutesAgo }
                     });
-                    await billing.save();
-                    console.log(`Consultation fee ${consultationFee} EGP (${consultationType}) recorded for ${existingPatient.patient_name}`);
+
+                    if (recentBilling) {
+                        console.log(`Skipping duplicate billing for ${existingPatient.patient_name} - already recorded within last 5 minutes`);
+                    } else {
+                        const billing = new Billing({
+                            billing_id: uuidv4(),
+                            doctor_id,
+                            patient_id: existingPatient.patient_id,
+                            patient_name: existingPatient.patient_name,
+                            patient_phone: existingPatient.patient_phone || "",
+                            visit_id: visit_id,
+                            clinic_id: clinic_id || "",
+                            consultationFee: consultationFee,
+                            consultationType: consultationType,
+                            services: [],
+                            servicesTotal: 0,
+                            subtotal: consultationFee,
+                            discount: null,
+                            totalAmount: consultationFee,
+                            paymentStatus: 'paid',
+                            paymentMethod: 'cash',
+                            amountPaid: consultationFee,
+                            notes: "Consultation fee - auto recorded on patient arrival",
+                            billingDate: new Date()
+                        });
+                        await billing.save();
+                        console.log(`Consultation fee ${consultationFee} EGP (${consultationType}) recorded for ${existingPatient.patient_name}`);
+                    }
                 }
             } catch (billingError) {
                 console.error('Error auto-recording consultation fee:', billingError);
@@ -289,29 +302,42 @@ const savePatient = async (req, res) => {
                 await resolveVisitTypeFee(doctor_id, visit_type, visit_speed, doctor);
 
             if (consultationFee > 0) {
-                const billing = new Billing({
-                    billing_id: uuidv4(),
-                    doctor_id,
+                // Deduplication guard: in case this is a retry and the patient was already
+                // saved + billed by the first request (which the client timed out waiting for).
+                const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+                const recentBilling = await Billing.findOne({
                     patient_id: newPatient.patient_id,
-                    patient_name: newPatient.patient_name,
-                    patient_phone: newPatient.patient_phone || "",
-                    visit_id: newPatient.visits[0]?.visit_id || "",
-                    clinic_id: clinic_id || "",
-                    consultationFee: consultationFee,
-                    consultationType: consultationType,
-                    services: [],
-                    servicesTotal: 0,
-                    subtotal: consultationFee,
-                    discount: null,
-                    totalAmount: consultationFee,
-                    paymentStatus: 'paid',
-                    paymentMethod: 'cash',
-                    amountPaid: consultationFee,
-                    notes: "Consultation fee - auto recorded on patient arrival",
-                    billingDate: new Date()
+                    doctor_id,
+                    billingDate: { $gte: fiveMinutesAgo }
                 });
-                await billing.save();
-                console.log(`Consultation fee ${consultationFee} EGP (${consultationType}) recorded for new patient ${newPatient.patient_name}`);
+
+                if (recentBilling) {
+                    console.log(`Skipping duplicate billing for new patient ${newPatient.patient_name} - already recorded within last 5 minutes`);
+                } else {
+                    const billing = new Billing({
+                        billing_id: uuidv4(),
+                        doctor_id,
+                        patient_id: newPatient.patient_id,
+                        patient_name: newPatient.patient_name,
+                        patient_phone: newPatient.patient_phone || "",
+                        visit_id: newPatient.visits[0]?.visit_id || "",
+                        clinic_id: clinic_id || "",
+                        consultationFee: consultationFee,
+                        consultationType: consultationType,
+                        services: [],
+                        servicesTotal: 0,
+                        subtotal: consultationFee,
+                        discount: null,
+                        totalAmount: consultationFee,
+                        paymentStatus: 'paid',
+                        paymentMethod: 'cash',
+                        amountPaid: consultationFee,
+                        notes: "Consultation fee - auto recorded on patient arrival",
+                        billingDate: new Date()
+                    });
+                    await billing.save();
+                    console.log(`Consultation fee ${consultationFee} EGP (${consultationType}) recorded for new patient ${newPatient.patient_name}`);
+                }
             }
         } catch (billingError) {
             console.error('Error auto-recording consultation fee for new patient:', billingError);
