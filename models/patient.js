@@ -1,5 +1,28 @@
 const mongoose = require('mongoose');
 
+const referralSchema = new mongoose.Schema({
+    referral_id: {
+        type: String,
+        default: () => require('uuid').v4()
+    },
+    referral_date: {
+        type: Date,
+        default: Date.now
+    },
+    from_doctor_name: { type: String, default: '' },
+    from_doctor_title: { type: String, default: '' },
+    from_clinic_name: { type: String, default: '' },
+    from_doctor_phone: { type: String, default: '' },
+    to_doctor_name: { type: String, default: '' },
+    to_doctor_title: { type: String, default: '' },
+    to_clinic_name: { type: String, default: '' },
+    subject: { type: String, default: '' },
+    referral_body: { type: String, default: '' },
+    signature: { type: String, default: '' },
+    doctor_id: { type: String, default: '' },
+    created_at: { type: Date, default: Date.now }
+}, { _id: false });
+
 const medicalReportSchema = new mongoose.Schema({
     report_id: {
         type: String,
@@ -225,6 +248,10 @@ const patientSchema = new mongoose.Schema({
     },
     medical_reports: {
         type: [medicalReportSchema],
+        default: []
+    },
+    referrals: {
+        type: [referralSchema],
         default: []
     },
     reports: [{

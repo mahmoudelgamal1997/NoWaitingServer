@@ -19,6 +19,7 @@ const externalServiceRoutes = require('./routes/externalServiceRoutes');
 const medicalHistoryRoutes = require('./routes/medicalHistoryRoutes');
 const visitTypeRoutes = require('./routes/visitTypeRoutes');
 const medicalReportRoutes = require('./routes/medicalReportRoutes');
+const referralRoutes = require('./routes/referralRoutes');
 
 const cors = require('cors');
 
@@ -101,6 +102,7 @@ app.use('/api/external-services', externalServiceRoutes);
 app.use('/api', medicalHistoryRoutes);
 app.use('/api/visit-types', visitTypeRoutes);
 app.use('/api', medicalReportRoutes);
+app.use('/api', referralRoutes);
 
 // Error handling middleware - must be after routes
 app.use((err, req, res, next) => {
