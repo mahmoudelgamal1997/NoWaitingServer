@@ -33,6 +33,15 @@ function normalizePatientTimeForResponse(p) {
     };
 }
 
+// Normalize phone for matching: digits only, last 10 digits (Egyptian numbers)
+// So "01234567890", "201234567890", "1234567890" all become "1234567890"
+function normalizePhone(phone) {
+    if (phone == null || typeof phone !== 'string') return '';
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length >= 10) return digits.slice(-10);
+    return digits;
+}
+
 // Generate a unique 5-digit file number not already used in the collection
 const generateFileNumber = async () => {
     let fileNumber;
@@ -150,12 +159,29 @@ const savePatient = async (req, res) => {
         }
 
         const trimmedFileNumber = (providedFileNumber || '').toString().trim();
+        const normalized = normalizePhone(patient_phone);
 
-        // Check if patient with same phone number and doctor_id already exists
-        let existingPatient = await Patient.findOne({
-            patient_phone,
-            doctor_id
-        });
+        // Find existing patient: same doctor + same phone (normalized so "0123..." and "123..." match)
+        let existingPatient = null;
+        if (normalized) {
+            existingPatient = await Patient.findOne({ doctor_id, normalized_phone: normalized });
+        }
+        if (!existingPatient) {
+            existingPatient = await Patient.findOne({ doctor_id, patient_phone });
+        }
+        if (!existingPatient && normalized) {
+            const candidates = await Patient.find(
+                { doctor_id, $or: [{ normalized_phone: '' }, { normalized_phone: { $exists: false } }] }
+            ).limit(2000).lean();
+            const match = candidates.find((p) => normalizePhone(p.patient_phone) === normalized);
+            if (match) {
+                existingPatient = await Patient.findById(match._id);
+                if (existingPatient) {
+                    existingPatient.normalized_phone = normalized;
+                    await existingPatient.save();
+                }
+            }
+        }
 
         if (existingPatient) {
             // Generate a unique visit ID
@@ -196,6 +222,9 @@ const savePatient = async (req, res) => {
             // Update doctor_name if we resolved it or if it was provided
             if (resolvedDoctorName) {
                 existingPatient.doctor_name = resolvedDoctorName;
+            }
+            if (normalized && !existingPatient.normalized_phone) {
+                existingPatient.normalized_phone = normalized;
             }
 
             await existingPatient.save();
@@ -262,6 +291,7 @@ const savePatient = async (req, res) => {
         const newPatient = new Patient({
             patient_name,
             patient_phone,
+            normalized_phone: normalized || '',
             patient_id: patient_id || uuidv4(), // Generate patient_id if not provided
             doctor_id,
             file_number: newFileNumber,
@@ -1191,8 +1221,14 @@ const getOrGenerateFileNumber = async (req, res) => {
             return res.status(400).json({ message: 'phone and doctor_id are required' });
         }
 
-        // If patient already exists, return their file_number
-        const existing = await Patient.findOne({ patient_phone: phone, doctor_id }).lean();
+        // If patient already exists, return their file_number (match by normalized or exact phone)
+        const norm = normalizePhone(phone);
+        let existing = norm
+            ? await Patient.findOne({ doctor_id, normalized_phone: norm }).lean()
+            : null;
+        if (!existing) {
+            existing = await Patient.findOne({ patient_phone: phone, doctor_id }).lean();
+        }
         if (existing && existing.file_number) {
             return res.json({ file_number: existing.file_number, existing: true });
         }

@@ -20,6 +20,7 @@ const medicalHistoryRoutes = require('./routes/medicalHistoryRoutes');
 const visitTypeRoutes = require('./routes/visitTypeRoutes');
 const medicalReportRoutes = require('./routes/medicalReportRoutes');
 const referralRoutes = require('./routes/referralRoutes');
+const packageRoutes = require('./routes/packageRoutes');
 
 const cors = require('cors');
 
@@ -103,6 +104,7 @@ app.use('/api', medicalHistoryRoutes);
 app.use('/api/visit-types', visitTypeRoutes);
 app.use('/api', medicalReportRoutes);
 app.use('/api', referralRoutes);
+app.use('/api', packageRoutes);
 
 // Error handling middleware - must be after routes
 app.use((err, req, res, next) => {
@@ -134,7 +136,7 @@ app.use((err, req, res, next) => {
 });
 
 // Start the server (try next port if default is in use)
-const PORT = parseInt(process.env.PORT, 10) || 6000;
+const PORT = parseInt(process.env.PORT, 10) || 7000;
 const maxAttempts = 6;
 
 function tryListen(port, attempt) {
