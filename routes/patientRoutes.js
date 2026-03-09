@@ -14,7 +14,8 @@ const {
     getPatientVisitHistory,
     updatePatientVisit,
     getVisitDetails,
-    deleteVisit
+    deleteVisit,
+    addComplaintHistory
 } = require('../controllers/visitController');
 
 // Middleware to verify authentication - example (implement your actual auth middleware)
@@ -41,5 +42,6 @@ router.get('/patients/visits', authenticateUser, getPatientVisitHistory);
 router.put('/patients/:patient_id/doctor/:doctor_id/visits/:visit_id', authenticateUser, updatePatientVisit);
 router.get('/patients/:patient_id/doctor/:doctor_id/visits/:visit_id', authenticateUser, getVisitDetails);
 router.delete('/patients/:patient_id/doctor/:doctor_id/visits/:visit_id', authenticateUser, deleteVisit);
+router.post('/patients/complaint-history', authenticateUser, addComplaintHistory);
 
 module.exports = router;

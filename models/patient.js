@@ -89,6 +89,12 @@ const receiptSchema = new mongoose.Schema({
     }
 });
 
+const complaintEntrySchema = new mongoose.Schema({
+    date: { type: Date, default: Date.now },
+    complaint: { type: String, default: "" },
+    diagnosis: { type: String, default: "" }
+}, { _id: true });
+
 const visitSchema = new mongoose.Schema({
     visit_id: {
         type: String
@@ -221,6 +227,10 @@ const patientSchema = new mongoose.Schema({
     },
     all_visits: {
         type: [visitSchema],
+        default: []
+    },
+    complaint_history: {
+        type: [complaintEntrySchema],
         default: []
     },
     user_order_in_queue: {

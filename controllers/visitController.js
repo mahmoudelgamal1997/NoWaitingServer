@@ -153,7 +153,8 @@ const getPatientVisitHistory = async (req, res) => {
                 totalPages: Math.ceil(sortedVisits.length / limit),
                 totalVisits: sortedVisits.length
             },
-            visits: paginatedVisits
+            visits: paginatedVisits,
+            complaint_history: [...(patient.complaint_history || [])].sort((a, b) => new Date(b.date) - new Date(a.date))
         });
     } catch (error) {
         console.error('Error retrieving patient visit history:', error);
@@ -161,6 +162,27 @@ const getPatientVisitHistory = async (req, res) => {
             message: 'Error retrieving patient visit history',
             error: error.message
         });
+    }
+};
+
+// Add a new complaint/diagnosis entry
+const addComplaintHistory = async (req, res) => {
+    try {
+        const { patient_id, doctor_id, complaint, diagnosis } = req.body;
+        if (!patient_id || !doctor_id) {
+            return res.status(400).json({ message: 'patient_id and doctor_id are required' });
+        }
+        const patient = await Patient.findOne({ patient_id, doctor_id });
+        if (!patient) return res.status(404).json({ message: 'Patient not found' });
+
+        const entry = { date: new Date(), complaint: complaint || '', diagnosis: diagnosis || '' };
+        patient.complaint_history.push(entry);
+        await patient.save();
+
+        res.status(201).json({ message: 'Added', entry: patient.complaint_history[patient.complaint_history.length - 1] });
+    } catch (error) {
+        console.error('Error adding complaint history:', error);
+        res.status(500).json({ message: 'Error adding complaint history', error: error.message });
     }
 };
 
@@ -317,5 +339,6 @@ module.exports = {
     getPatientVisitHistory, 
     updatePatientVisit,
     getVisitDetails,
-    deleteVisit
+    deleteVisit,
+    addComplaintHistory
 };
