@@ -115,8 +115,21 @@ const getPatientVisitHistory = async (req, res) => {
             return res.status(404).json({ message: 'Patient not found' });
         }
 
+        // Merge visits + all_visits and dedupe by visit_id so we return full history
+        const allVisitsArr = patient.all_visits || [];
+        const visitsArr = patient.visits || [];
+        const seen = new Set();
+        const sourceVisits = [];
+        for (const v of [...allVisitsArr, ...visitsArr]) {
+            const id = v.visit_id || v.billing_id || v._id?.toString?.() || '';
+            if (!id || !seen.has(id)) {
+                if (id) seen.add(id);
+                sourceVisits.push(v);
+            }
+        }
+
         // Sort visits by date in descending order (most recent first)
-        const sortedVisits = [...patient.visits].sort((a, b) => {
+        const sortedVisits = [...sourceVisits].sort((a, b) => {
             const dateA = new Date(a.date || 0);
             const dateB = new Date(b.date || 0);
             return dateB.getTime() - dateA.getTime();
