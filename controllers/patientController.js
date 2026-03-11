@@ -57,6 +57,85 @@ const generateFileNumber = async () => {
 };
 
 /**
+ * Parse clinic scope parameters from a request (query or body).
+ * Returns { useClinicScope: boolean, clinicIds: string[] }.
+ * When useClinicScope is false, clinicIds is empty and ALL existing code paths remain
+ * completely unchanged — this is the default for every existing single-doctor clinic.
+ */
+function parseClinicScope(req) {
+    const rawScope = req.query.use_clinic_scope || (req.body && req.body.use_clinic_scope);
+    const useClinicScope = rawScope === 'true' || rawScope === true;
+    if (!useClinicScope) return { useClinicScope: false, clinicIds: [] };
+
+    let clinicIds = [];
+    const raw = req.query.clinic_ids || (req.body && req.body.clinic_ids);
+    if (Array.isArray(raw)) {
+        clinicIds = raw.filter(Boolean);
+    } else if (typeof raw === 'string' && raw.trim()) {
+        clinicIds = raw.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    // Fall back to single clinic_id if clinic_ids not provided
+    const singleClinicId = req.query.clinic_id || (req.body && req.body.clinic_id);
+    if (clinicIds.length === 0 && singleClinicId) {
+        clinicIds = [singleClinicId];
+    }
+    return { useClinicScope: clinicIds.length > 0, clinicIds };
+}
+
+/**
+ * Merge multiple patient documents (from different doctors/branches) into one
+ * logical patient response for clinic-scope queries.
+ * The doc with a file_number is used as the canonical base.
+ * Visits and complaint_history are merged and deduped across all docs.
+ */
+function mergePatientsToOne(patientDocs) {
+    if (!patientDocs || patientDocs.length === 0) return null;
+    const docs = patientDocs.map(p =>
+        (p.toObject && typeof p.toObject === 'function') ? p.toObject() : { ...p }
+    );
+    // Prefer doc with file_number as base; otherwise most recently created
+    docs.sort((a, b) => {
+        if (a.file_number && !b.file_number) return -1;
+        if (!a.file_number && b.file_number) return 1;
+        return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+    });
+    const base = { ...docs[0] };
+
+    // Merge visits + all_visits from all docs, deduped by visit_id
+    const visitSeen = new Set();
+    const mergedVisits = [];
+    for (const doc of docs) {
+        for (const v of [...(doc.all_visits || []), ...(doc.visits || [])]) {
+            const vid = v.visit_id || v._id?.toString?.() || '';
+            if (!vid || !visitSeen.has(vid)) {
+                if (vid) visitSeen.add(vid);
+                mergedVisits.push(v);
+            }
+        }
+    }
+    mergedVisits.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+    base.visits = mergedVisits;
+    base.all_visits = [];
+
+    // Merge complaint_history from all docs, deduped by _id
+    const complaintSeen = new Set();
+    const mergedComplaints = [];
+    for (const doc of docs) {
+        for (const c of (doc.complaint_history || [])) {
+            const cid = c._id?.toString?.() || '';
+            if (!cid || !complaintSeen.has(cid)) {
+                if (cid) complaintSeen.add(cid);
+                mergedComplaints.push(c);
+            }
+        }
+    }
+    mergedComplaints.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+    base.complaint_history = mergedComplaints;
+
+    return base;
+}
+
+/**
  * Resolve the consultation fee and display label for a given visit_type.
  * Priority:
  *   1. VisitTypeConfiguration (supports custom visit types added by doctor)
@@ -183,6 +262,22 @@ const savePatient = async (req, res) => {
             }
         }
 
+        // CLINIC SCOPE: When enabled, look across all branches for same phone to reuse file_number.
+        // This runs only if the patient was NOT found under this specific doctor above.
+        let sharedFileNumber = null;
+        if (!existingPatient && normalized) {
+            const { useClinicScope: saveScope, clinicIds: saveClinicIds } = parseClinicScope(req);
+            if (saveScope) {
+                const clinicScopePatient = await Patient.findOne({
+                    clinic_id: { $in: saveClinicIds },
+                    normalized_phone: normalized
+                }).lean();
+                if (clinicScopePatient && clinicScopePatient.file_number) {
+                    sharedFileNumber = clinicScopePatient.file_number;
+                }
+            }
+        }
+
         if (existingPatient) {
             // Generate a unique visit ID
             const visit_id = uuidv4();
@@ -286,8 +381,8 @@ const savePatient = async (req, res) => {
         }
 
         // If patient doesn't exist, create a new patient.
-        // Prefer the file_number already assigned on the frontend; otherwise generate one.
-        const newFileNumber = trimmedFileNumber || await generateFileNumber();
+        // Priority: frontend-provided > shared from another branch > newly generated.
+        const newFileNumber = trimmedFileNumber || sharedFileNumber || await generateFileNumber();
         const newPatient = new Patient({
             patient_name,
             patient_phone,
@@ -717,6 +812,92 @@ const getAllPatients = async (req, res) => {
             search
         } = req.query;
 
+        // CLINIC SCOPE: When enabled, query across all specified branch clinic_ids,
+        // then merge results by normalized_phone (same patient seen as one entry with all visits).
+        // This code path is NEVER triggered for existing single-doctor/single-clinic users.
+        const { useClinicScope: allScope, clinicIds: allClinicIds } = parseClinicScope(req);
+        if (allScope) {
+            const scopeFilter = { clinic_id: { $in: allClinicIds } };
+            if (search) {
+                scopeFilter.$or = [
+                    { patient_name: { $regex: search, $options: 'i' } },
+                    { patient_phone: { $regex: search, $options: 'i' } },
+                    { file_number: { $regex: search, $options: 'i' } }
+                ];
+            }
+            if (startDate || endDate) {
+                scopeFilter.createdAt = {};
+                if (startDate) { const s = new Date(startDate); s.setHours(0,0,0,0); scopeFilter.createdAt.$gte = s; }
+                if (endDate) { const e = new Date(endDate); e.setHours(23,59,59,999); scopeFilter.createdAt.$lte = e; }
+            }
+
+            const sortObj = { createdAt: sortOrder === 'asc' ? 1 : -1 };
+            const allScopePatients = await Patient.find(scopeFilter).sort(sortObj);
+
+            // Merge by normalized_phone: combine visits from all doctor docs for the same patient
+            const phoneMap = new Map();
+            for (const p of allScopePatients) {
+                const po = p.toObject ? p.toObject() : { ...p };
+                const key = po.normalized_phone || normalizePhone(po.patient_phone) || po.patient_phone;
+                if (!key) { phoneMap.set(po._id?.toString() || Math.random(), po); continue; }
+                if (!phoneMap.has(key)) {
+                    phoneMap.set(key, po);
+                } else {
+                    const existing = phoneMap.get(key);
+                    // Merge visits
+                    const visitSeen = new Set((existing.visits || []).map(v => v.visit_id || v._id?.toString()));
+                    for (const v of (po.visits || [])) {
+                        const vid = v.visit_id || v._id?.toString() || '';
+                        if (!vid || !visitSeen.has(vid)) { visitSeen.add(vid); existing.visits.push(v); }
+                    }
+                    existing.visits.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+                    // Keep most recent patient info
+                    if (new Date(po.createdAt || 0) > new Date(existing.createdAt || 0)) {
+                        existing.patient_name = po.patient_name || existing.patient_name;
+                        existing.age = po.age || existing.age;
+                        existing.address = po.address || existing.address;
+                    }
+                    // Keep the first file_number found
+                    if (!existing.file_number && po.file_number) existing.file_number = po.file_number;
+                }
+            }
+
+            let mergedList = Array.from(phoneMap.values());
+            // Sort merged list by latest visit or createdAt
+            mergedList.sort((a, b) => {
+                const latestA = a.visits && a.visits.length > 0 ? new Date(a.visits[0].date || 0) : new Date(a.createdAt || 0);
+                const latestB = b.visits && b.visits.length > 0 ? new Date(b.visits[0].date || 0) : new Date(b.createdAt || 0);
+                return sortOrder === 'asc' ? latestA - latestB : latestB - latestA;
+            });
+
+            const totalCount = mergedList.length;
+            let paginationInfo = null;
+            if (page !== undefined || limit !== undefined) {
+                const pageNum = parseInt(page) || 1;
+                const limitNum = parseInt(limit) || 20;
+                const skip = (pageNum - 1) * limitNum;
+                const totalPages = Math.ceil(totalCount / limitNum);
+                paginationInfo = {
+                    currentPage: pageNum, totalPages, totalItems: totalCount,
+                    itemsPerPage: limitNum,
+                    hasNextPage: pageNum < totalPages, hasPrevPage: pageNum > 1,
+                    nextPage: pageNum < totalPages ? pageNum + 1 : null,
+                    prevPage: pageNum > 1 ? pageNum - 1 : null
+                };
+                mergedList = mergedList.slice(skip, skip + limitNum);
+            }
+
+            return res.status(200).json({
+                success: true,
+                message: 'Patients retrieved successfully (clinic scope)',
+                data: mergedList.map(normalizePatientTimeForResponse),
+                totalItems: totalCount,
+                pagination: paginationInfo,
+                filters: { clinic_ids: allClinicIds, search: search || null, startDate: startDate || null, endDate: endDate || null }
+            });
+        }
+
+        // EXISTING PATH: single doctor/clinic filter — unchanged for all current users
         // Build filter object - only include filters that are provided (strict matching)
         const filter = {};
 
@@ -1000,7 +1181,24 @@ const getPatientByIdOrPhone = async (req, res) => {
             return res.status(400).json({ message: 'Doctor ID is required' });
         }
 
-        // Check if the identifier is a phone number or patient ID
+        // CLINIC SCOPE: When enabled, find the patient across all branch clinic_ids and merge docs.
+        const { useClinicScope: lookupScope, clinicIds: lookupClinicIds } = parseClinicScope(req);
+        if (lookupScope) {
+            const normalizedId = normalizePhone(identifier);
+            const orConditions = [{ patient_phone: identifier }, { patient_id: identifier }];
+            if (normalizedId) orConditions.push({ normalized_phone: normalizedId });
+            const clinicPatients = await Patient.find({
+                clinic_id: { $in: lookupClinicIds },
+                $or: orConditions
+            });
+            if (!clinicPatients || clinicPatients.length === 0) {
+                return res.status(404).json({ message: 'Patient not found' });
+            }
+            const merged = mergePatientsToOne(clinicPatients);
+            return res.status(200).json({ message: 'Patient found', patient: merged });
+        }
+
+        // EXISTING PATH: single doctor lookup — unchanged for all current users
         const patient = await Patient.findOne({
             $and: [
                 { doctor_id },
@@ -1221,8 +1419,27 @@ const getOrGenerateFileNumber = async (req, res) => {
             return res.status(400).json({ message: 'phone and doctor_id are required' });
         }
 
-        // If patient already exists, return their file_number (match by normalized or exact phone)
         const norm = normalizePhone(phone);
+
+        // CLINIC SCOPE: When enabled, search across all branch clinic_ids for an existing file_number.
+        // This allows all branches of a center to share the same file number per patient.
+        const { useClinicScope: fnScope, clinicIds: fnClinicIds } = parseClinicScope(req);
+        if (fnScope) {
+            let scopeExisting = norm
+                ? await Patient.findOne({ clinic_id: { $in: fnClinicIds }, normalized_phone: norm }).lean()
+                : null;
+            if (!scopeExisting) {
+                scopeExisting = await Patient.findOne({ clinic_id: { $in: fnClinicIds }, patient_phone: phone }).lean();
+            }
+            if (scopeExisting && scopeExisting.file_number) {
+                return res.json({ file_number: scopeExisting.file_number, existing: true });
+            }
+            // Not found in clinic scope — generate a new unique file_number
+            const file_number = await generateFileNumber();
+            return res.json({ file_number, existing: false });
+        }
+
+        // EXISTING PATH: single doctor lookup — unchanged for all current users
         let existing = norm
             ? await Patient.findOne({ doctor_id, normalized_phone: norm }).lean()
             : null;

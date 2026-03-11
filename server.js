@@ -46,6 +46,7 @@ app.use(cors({
       'http://localhost:3000',  // Common React default port
       'http://localhost:3001',  // Your current frontend port
       'http://localhost:3006',  // Frontend port
+      'http://localhost:3020',  // Dashboard dev port
       'http://localhost:7000',  // Your backend port
       'http://127.0.0.1:3000',
       'http://127.0.0.1:3001',
