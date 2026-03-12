@@ -92,7 +92,8 @@ const receiptSchema = new mongoose.Schema({
 const complaintEntrySchema = new mongoose.Schema({
     date: { type: Date, default: Date.now },
     complaint: { type: String, default: "" },
-    diagnosis: { type: String, default: "" }
+    diagnosis: { type: String, default: "" },
+    doctor_name: { type: String, default: "" }
 }, { _id: true });
 
 const visitSchema = new mongoose.Schema({
