@@ -161,7 +161,7 @@ const getDoctorSettings = async (req, res) => {
 
         res.status(200).json({
             message: 'Doctor settings retrieved successfully',
-            doctor_name: doctor.name || '',
+            doctor_name: doctor.name || settingsObj.clinicName || '',
             settings: {
                 ...settingsObj,
                 visitTypes: visitTypes || []

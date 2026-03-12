@@ -289,7 +289,9 @@ const addComplaintHistory = async (req, res) => {
             const Doctor = require('../models/doctor');
             const lookupId = added_by_doctor_id || doctor_id;
             const doctor = await Doctor.findOne({ doctor_id: lookupId });
-            if (doctor && doctor.name) resolvedName = doctor.name;
+            if (doctor) {
+                resolvedName = doctor.name || doctor.settings?.clinicName || '';
+            }
         }
         const entry = { date: new Date(), complaint: complaint || '', diagnosis: diagnosis || '', doctor_name: resolvedName };
         patient.complaint_history.push(entry);
