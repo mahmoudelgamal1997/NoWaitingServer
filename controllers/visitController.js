@@ -277,14 +277,21 @@ const getPatientVisitHistory = async (req, res) => {
 // Add a new complaint/diagnosis entry
 const addComplaintHistory = async (req, res) => {
     try {
-        const { patient_id, doctor_id, complaint, diagnosis, doctor_name } = req.body;
+        const { patient_id, doctor_id, complaint, diagnosis, doctor_name, added_by_doctor_id } = req.body;
         if (!patient_id || !doctor_id) {
             return res.status(400).json({ message: 'patient_id and doctor_id are required' });
         }
         const patient = await Patient.findOne({ patient_id, doctor_id });
         if (!patient) return res.status(404).json({ message: 'Patient not found' });
 
-        const entry = { date: new Date(), complaint: complaint || '', diagnosis: diagnosis || '', doctor_name: doctor_name || '' };
+        let resolvedName = doctor_name || '';
+        if (!resolvedName) {
+            const Doctor = require('../models/doctor');
+            const lookupId = added_by_doctor_id || doctor_id;
+            const doctor = await Doctor.findOne({ doctor_id: lookupId });
+            if (doctor && doctor.name) resolvedName = doctor.name;
+        }
+        const entry = { date: new Date(), complaint: complaint || '', diagnosis: diagnosis || '', doctor_name: resolvedName };
         patient.complaint_history.push(entry);
         await patient.save();
 
