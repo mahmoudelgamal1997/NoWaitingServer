@@ -818,6 +818,9 @@ const getAllPatients = async (req, res) => {
         const { useClinicScope: allScope, clinicIds: allClinicIds } = parseClinicScope(req);
         if (allScope) {
             const scopeFilter = { clinic_id: { $in: allClinicIds } };
+            if (doctor_id) {
+                scopeFilter.doctor_id = doctor_id;
+            }
             if (search) {
                 scopeFilter.$or = [
                     { patient_name: { $regex: search, $options: 'i' } },
