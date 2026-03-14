@@ -287,10 +287,14 @@ const addComplaintHistory = async (req, res) => {
         let resolvedName = doctor_name || '';
         if (!resolvedName) {
             const Doctor = require('../models/doctor');
-            const lookupId = added_by_doctor_id || doctor_id;
-            const doctor = await Doctor.findOne({ doctor_id: lookupId });
+            const lookupIds = [added_by_doctor_id, doctor_id].filter(Boolean);
+            let doctor = null;
+            for (const lookupId of lookupIds) {
+                doctor = await Doctor.findOne({ doctor_id: lookupId });
+                if (doctor) break;
+            }
             if (doctor) {
-                resolvedName = doctor.name || doctor.settings?.clinicName || '';
+                resolvedName = doctor.name || doctor.settings?.doctorTitle || doctor.settings?.clinicName || '';
             }
         }
         const entry = { date: new Date(), complaint: complaint || '', diagnosis: diagnosis || '', doctor_name: resolvedName };
