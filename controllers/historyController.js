@@ -16,6 +16,7 @@ const getAllHistory = async (req, res) => {
     try {
         const {
             doctor_id,
+            doctor_ids,
             page = 1,
             limit = 20,
             startDate,
@@ -30,20 +31,30 @@ const getAllHistory = async (req, res) => {
         const limitNum = parseInt(limit);
         const skip = (pageNum - 1) * limitNum;
 
-        // SECURITY: Require doctor_id to prevent returning all patients
-        if (!doctor_id) {
+        // SECURITY: Require doctor_id OR doctor_ids to scope the query
+        let doctorFilter;
+        if (doctor_id) {
+            doctorFilter = { doctor_id };
+        } else if (doctor_ids) {
+            const ids = (Array.isArray(doctor_ids) ? doctor_ids : String(doctor_ids).split(',')).map(s => s.trim()).filter(Boolean);
+            if (ids.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'doctor_id or doctor_ids parameter is required',
+                    error: 'Missing doctor scope'
+                });
+            }
+            doctorFilter = { doctor_id: { $in: ids } };
+        } else {
             return res.status(400).json({
                 success: false,
-                message: 'doctor_id parameter is required for security reasons',
+                message: 'doctor_id or doctor_ids parameter is required for security reasons',
                 error: 'Missing doctor_id parameter'
             });
         }
 
         // Build query
-        let query = {};
-
-        // Filter by doctor_id (required)
-        query.doctor_id = doctor_id;
+        let query = { ...doctorFilter };
 
         // Filter by date range if provided
         if (startDate || endDate) {
@@ -168,6 +179,7 @@ const getAllHistory = async (req, res) => {
             },
             filters: {
                 doctor_id: doctor_id || null,
+                doctor_ids: doctor_ids || null,
                 startDate: startDate || null,
                 endDate: endDate || null,
                 search: search || null,
