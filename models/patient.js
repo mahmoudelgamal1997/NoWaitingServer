@@ -143,6 +143,12 @@ const patientSchema = new mongoose.Schema({
         default: '',
         index: true
     },
+    // Normalized name (trimmed, lowercased) for differentiating same-phone patients (e.g. parent + children)
+    normalized_name: {
+        type: String,
+        default: '',
+        index: true
+    },
     patient_id: {
         type: String,
         required: true
@@ -312,5 +318,6 @@ const patientSchema = new mongoose.Schema({
 // Remove the unique index
 patientSchema.index({ 'visits.visit_id': 1 });
 patientSchema.index({ doctor_id: 1, normalized_phone: 1 });
+patientSchema.index({ doctor_id: 1, normalized_phone: 1, normalized_name: 1 });
 
 module.exports = mongoose.model('Patient', patientSchema);

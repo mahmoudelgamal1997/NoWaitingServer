@@ -42,6 +42,30 @@ function normalizePhone(phone) {
     return digits;
 }
 
+// Normalize name for matching: trimmed, single-spaced, lowercased
+function normalizeName(name) {
+    if (!name || typeof name !== 'string') return '';
+    return name.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+// Levenshtein-based similarity in [0,1]; 1 = identical
+function nameSimilarity(a, b) {
+    const s1 = (a || '').trim().replace(/\s+/g, ' ');
+    const s2 = (b || '').trim().replace(/\s+/g, ' ');
+    if (!s1 || !s2) return 0;
+    if (s1 === s2) return 1;
+    const len1 = s1.length, len2 = s2.length;
+    const dp = Array.from({ length: len1 + 1 }, (_, i) =>
+        Array.from({ length: len2 + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+    );
+    for (let i = 1; i <= len1; i++)
+        for (let j = 1; j <= len2; j++)
+            dp[i][j] = s1[i - 1] === s2[j - 1]
+                ? dp[i - 1][j - 1]
+                : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    return 1 - dp[len1][len2] / Math.max(len1, len2);
+}
+
 // Generate a unique 5-digit file number not already used in the collection
 const generateFileNumber = async () => {
     let fileNumber;
@@ -239,24 +263,42 @@ const savePatient = async (req, res) => {
 
         const trimmedFileNumber = (providedFileNumber || '').toString().trim();
         const normalized = normalizePhone(patient_phone);
+        const normalizedPatientName = normalizeName(patient_name);
 
-        // Find existing patient: same doctor + same phone (normalized so "0123..." and "123..." match)
+        // Find existing patient: same doctor + same phone + same name (≥95% similarity)
+        // This prevents merging different family members who share a phone number.
         let existingPatient = null;
         if (normalized) {
-            existingPatient = await Patient.findOne({ doctor_id, normalized_phone: normalized });
+            const phoneMatches = await Patient.find({ doctor_id, normalized_phone: normalized });
+            existingPatient = phoneMatches.find((p) => {
+                // If the stored record has a normalized_name, use similarity check
+                const storedName = p.normalized_name || normalizeName(p.patient_name);
+                return nameSimilarity(normalizedPatientName, storedName) >= 0.95;
+            }) || null;
         }
         if (!existingPatient) {
-            existingPatient = await Patient.findOne({ doctor_id, patient_phone });
+            const exactMatches = await Patient.find({ doctor_id, patient_phone });
+            existingPatient = exactMatches.find((p) => {
+                const storedName = p.normalized_name || normalizeName(p.patient_name);
+                return nameSimilarity(normalizedPatientName, storedName) >= 0.95;
+            }) || null;
         }
         if (!existingPatient && normalized) {
             const candidates = await Patient.find(
                 { doctor_id, $or: [{ normalized_phone: '' }, { normalized_phone: { $exists: false } }] }
             ).limit(2000).lean();
-            const match = candidates.find((p) => normalizePhone(p.patient_phone) === normalized);
+            const match = candidates.find((p) => {
+                if (normalizePhone(p.patient_phone) !== normalized) return false;
+                const storedName = p.normalized_name || normalizeName(p.patient_name);
+                return nameSimilarity(normalizedPatientName, storedName) >= 0.95;
+            });
             if (match) {
                 existingPatient = await Patient.findById(match._id);
                 if (existingPatient) {
                     existingPatient.normalized_phone = normalized;
+                    if (!existingPatient.normalized_name) {
+                        existingPatient.normalized_name = normalizeName(existingPatient.patient_name);
+                    }
                     await existingPatient.save();
                 }
             }
@@ -320,6 +362,9 @@ const savePatient = async (req, res) => {
             }
             if (normalized && !existingPatient.normalized_phone) {
                 existingPatient.normalized_phone = normalized;
+            }
+            if (normalizedPatientName && !existingPatient.normalized_name) {
+                existingPatient.normalized_name = normalizedPatientName;
             }
 
             await existingPatient.save();
@@ -387,6 +432,7 @@ const savePatient = async (req, res) => {
             patient_name,
             patient_phone,
             normalized_phone: normalized || '',
+            normalized_name: normalizedPatientName || '',
             patient_id: patient_id || uuidv4(), // Generate patient_id if not provided
             doctor_id,
             file_number: newFileNumber,
@@ -1417,37 +1463,50 @@ const updatePatientVisitType = async (req, res) => {
  */
 const getOrGenerateFileNumber = async (req, res) => {
     try {
-        const { phone, doctor_id } = req.query;
+        const { phone, doctor_id, patient_name } = req.query;
         if (!phone || !doctor_id) {
             return res.status(400).json({ message: 'phone and doctor_id are required' });
         }
 
         const norm = normalizePhone(phone);
+        const normalizedPatientName = normalizeName(patient_name);
+
+        // Helper: pick the best matching patient from a list by name similarity (≥95%)
+        const findByName = (list) => {
+            if (!normalizedPatientName) return list[0] || null;
+            return list.find((p) => {
+                const storedName = p.normalized_name || normalizeName(p.patient_name);
+                return nameSimilarity(normalizedPatientName, storedName) >= 0.95;
+            }) || null;
+        };
 
         // CLINIC SCOPE: When enabled, search across all branch clinic_ids for an existing file_number.
         // This allows all branches of a center to share the same file number per patient.
         const { useClinicScope: fnScope, clinicIds: fnClinicIds } = parseClinicScope(req);
         if (fnScope) {
-            let scopeExisting = norm
-                ? await Patient.findOne({ clinic_id: { $in: fnClinicIds }, normalized_phone: norm }).lean()
-                : null;
+            const scopeCandidates = norm
+                ? await Patient.find({ clinic_id: { $in: fnClinicIds }, normalized_phone: norm }).lean()
+                : [];
+            let scopeExisting = findByName(scopeCandidates);
             if (!scopeExisting) {
-                scopeExisting = await Patient.findOne({ clinic_id: { $in: fnClinicIds }, patient_phone: phone }).lean();
+                const fallback = await Patient.find({ clinic_id: { $in: fnClinicIds }, patient_phone: phone }).lean();
+                scopeExisting = findByName(fallback);
             }
             if (scopeExisting && scopeExisting.file_number) {
                 return res.json({ file_number: scopeExisting.file_number, existing: true });
             }
-            // Not found in clinic scope — generate a new unique file_number
             const file_number = await generateFileNumber();
             return res.json({ file_number, existing: false });
         }
 
-        // EXISTING PATH: single doctor lookup — unchanged for all current users
-        let existing = norm
-            ? await Patient.findOne({ doctor_id, normalized_phone: norm }).lean()
-            : null;
+        // EXISTING PATH: single doctor lookup with optional name filtering
+        const candidates = norm
+            ? await Patient.find({ doctor_id, normalized_phone: norm }).lean()
+            : [];
+        let existing = findByName(candidates);
         if (!existing) {
-            existing = await Patient.findOne({ patient_phone: phone, doctor_id }).lean();
+            const fallback = await Patient.find({ patient_phone: phone, doctor_id }).lean();
+            existing = findByName(fallback);
         }
         if (existing && existing.file_number) {
             return res.json({ file_number: existing.file_number, existing: true });
@@ -1462,6 +1521,28 @@ const getOrGenerateFileNumber = async (req, res) => {
     }
 };
 
+/**
+ * GET /api/patients/by-phone?phone=&doctor_id=
+ * Returns all patients for this doctor matching the given phone number.
+ * Used by the assistant portal to detect same-phone family members.
+ */
+const getPatientsByPhone = async (req, res) => {
+    try {
+        const { phone, doctor_id } = req.query;
+        if (!phone || !doctor_id) {
+            return res.status(400).json({ message: 'phone and doctor_id are required' });
+        }
+        const norm = normalizePhone(phone);
+        const patients = await Patient.find({ doctor_id, normalized_phone: norm })
+            .select('patient_name file_number patient_id -_id')
+            .lean();
+        return res.json({ patients });
+    } catch (error) {
+        console.error('Error fetching patients by phone:', error);
+        res.status(500).json({ message: 'Error fetching patients by phone', error: error.message });
+    }
+};
+
 module.exports = {
     savePatient,
     getAllPatients,
@@ -1469,5 +1550,6 @@ module.exports = {
     updatePatient,
     getPatientByIdOrPhone,
     updatePatientVisitType,
-    getOrGenerateFileNumber
+    getOrGenerateFileNumber,
+    getPatientsByPhone
 };
