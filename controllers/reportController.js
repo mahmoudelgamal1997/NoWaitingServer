@@ -92,22 +92,19 @@ const uploadPatientReport = async (req, res) => {
         
         let patient;
 
-        // First try: Find by patient_phone + doctor_id.
-        // When file_number is provided, include it to disambiguate patients who share the
-        // same phone (e.g. family members with different file numbers).
-        // Falls back to phone-only for legacy records with no file_number — backward compatible.
-        const phoneQuery = { patient_phone: trimmedPhone, doctor_id: trimmedDoctorId };
+        // file_number is unique per doctor — use it exclusively when present to avoid
+        // phone/patient_id collisions between patients sharing the same number.
+        // Backward compat: no file_number → try phone first, then patient_id.
         if (trimmedFileNumber) {
-            phoneQuery.file_number = trimmedFileNumber;
+            patient = await Patient.findOne({ file_number: trimmedFileNumber, doctor_id: trimmedDoctorId });
         }
-        patient = await Patient.findOne(phoneQuery);
 
-        // Second try: If patient_id provided and not found by phone, try patient_id + doctor_id
+        // Fallback: no file_number (legacy records) — try phone first, then patient_id
+        if (!patient && trimmedPhone) {
+            patient = await Patient.findOne({ patient_phone: trimmedPhone, doctor_id: trimmedDoctorId });
+        }
         if (!patient && trimmedPatientId) {
-            patient = await Patient.findOne({
-                patient_id: trimmedPatientId,
-                doctor_id: trimmedDoctorId
-            });
+            patient = await Patient.findOne({ patient_id: trimmedPatientId, doctor_id: trimmedDoctorId });
         }
 
         // If patient not found, create minimal patient record
@@ -221,33 +218,32 @@ const getPatientReports = async (req, res) => {
             });
         }
 
-        // Build $or conditions. When file_number is provided alongside patient_phone,
-        // include it to disambiguate patients who share the same phone (e.g. family members
-        // with different file numbers). Falls back to phone-only for legacy records that
-        // have no file_number — backward compatible.
-        const orConditions = [];
-        if (patient_id && patient_id.trim() !== '') {
-            orConditions.push({ patient_id: patient_id.trim() });
-        }
-        if (patient_phone && patient_phone.trim() !== '') {
-            const phoneCondition = { patient_phone: patient_phone.trim() };
-            if (file_number && file_number.trim() !== '') {
-                phoneCondition.file_number = file_number.trim();
+        // file_number is unique per doctor and is the most precise identifier.
+        // When present, use it exclusively — avoids all phone/patient_id collisions
+        // (e.g. brothers sharing the same phone or same generated patient_id).
+        // Backward compat: no file_number → fall back to original $or logic so that
+        // existing patients without a file_number continue to work.
+        let patientQuery;
+        if (file_number && file_number.trim() !== '') {
+            patientQuery = { doctor_id: doctor_id.trim(), file_number: file_number.trim() };
+        } else {
+            const orConditions = [];
+            if (patient_id && patient_id.trim() !== '') {
+                orConditions.push({ patient_id: patient_id.trim() });
             }
-            orConditions.push(phoneCondition);
+            if (patient_phone && patient_phone.trim() !== '') {
+                orConditions.push({ patient_phone: patient_phone.trim() });
+            }
+            if (orConditions.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Either patient_id or patient_phone must be provided and non-empty'
+                });
+            }
+            patientQuery = { doctor_id: doctor_id.trim(), $or: orConditions };
         }
 
-        if (orConditions.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Either patient_id or patient_phone must be provided and non-empty'
-            });
-        }
-
-        const patient = await Patient.findOne({
-            doctor_id: doctor_id.trim(),
-            $or: orConditions
-        }).select('reports patient_id patient_name patient_phone');
+        const patient = await Patient.findOne(patientQuery).select('reports patient_id patient_name patient_phone');
 
         if (!patient) {
             return res.status(404).json({
@@ -304,33 +300,32 @@ const deletePatientReport = async (req, res) => {
             });
         }
 
-        // Build $or conditions. When file_number is provided alongside patient_phone,
-        // include it to disambiguate patients who share the same phone (e.g. family members
-        // with different file numbers). Falls back to phone-only for legacy records that
-        // have no file_number — backward compatible.
-        const orConditions = [];
-        if (patient_id && patient_id.trim() !== '') {
-            orConditions.push({ patient_id: patient_id.trim() });
-        }
-        if (patient_phone && patient_phone.trim() !== '') {
-            const phoneCondition = { patient_phone: patient_phone.trim() };
-            if (file_number && file_number.trim() !== '') {
-                phoneCondition.file_number = file_number.trim();
+        // file_number is unique per doctor and is the most precise identifier.
+        // When present, use it exclusively — avoids all phone/patient_id collisions
+        // (e.g. brothers sharing the same phone or same generated patient_id).
+        // Backward compat: no file_number → fall back to original $or logic so that
+        // existing patients without a file_number continue to work.
+        let patientQuery;
+        if (file_number && file_number.trim() !== '') {
+            patientQuery = { doctor_id: doctor_id.trim(), file_number: file_number.trim() };
+        } else {
+            const orConditions = [];
+            if (patient_id && patient_id.trim() !== '') {
+                orConditions.push({ patient_id: patient_id.trim() });
             }
-            orConditions.push(phoneCondition);
+            if (patient_phone && patient_phone.trim() !== '') {
+                orConditions.push({ patient_phone: patient_phone.trim() });
+            }
+            if (orConditions.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Either patient_id or patient_phone must be provided and non-empty'
+                });
+            }
+            patientQuery = { doctor_id: doctor_id.trim(), $or: orConditions };
         }
 
-        if (orConditions.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Either patient_id or patient_phone must be provided and non-empty'
-            });
-        }
-
-        const patient = await Patient.findOne({
-            doctor_id: doctor_id.trim(),
-            $or: orConditions
-        });
+        const patient = await Patient.findOne(patientQuery);
 
         if (!patient) {
             return res.status(404).json({
@@ -427,24 +422,19 @@ const uploadPatientReportFromUrls = async (req, res) => {
         
         let patient;
 
-        // First try: Find by patient_phone + doctor_id.
-        // When file_number is provided, include it to disambiguate patients who share the
-        // same phone (e.g. family members with different file numbers).
-        // Falls back to phone-only for legacy records with no file_number — backward compatible.
-        if (trimmedPhone) {
-            const phoneQuery = { patient_phone: trimmedPhone, doctor_id: trimmedDoctorId };
-            if (trimmedFileNumber) {
-                phoneQuery.file_number = trimmedFileNumber;
-            }
-            patient = await Patient.findOne(phoneQuery);
+        // file_number is unique per doctor — use it exclusively when present to avoid
+        // phone/patient_id collisions between patients sharing the same number.
+        // Backward compat: no file_number → try phone first, then patient_id.
+        if (trimmedFileNumber) {
+            patient = await Patient.findOne({ file_number: trimmedFileNumber, doctor_id: trimmedDoctorId });
         }
 
-        // Second try: If patient_id provided and not found by phone, try patient_id + doctor_id
+        // Fallback: no file_number (legacy records) — try phone first, then patient_id
+        if (!patient && trimmedPhone) {
+            patient = await Patient.findOne({ patient_phone: trimmedPhone, doctor_id: trimmedDoctorId });
+        }
         if (!patient && trimmedPatientId) {
-            patient = await Patient.findOne({
-                patient_id: trimmedPatientId,
-                doctor_id: trimmedDoctorId
-            });
+            patient = await Patient.findOne({ patient_id: trimmedPatientId, doctor_id: trimmedDoctorId });
         }
 
         // If patient not found, create minimal patient record
