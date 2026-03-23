@@ -1,6 +1,23 @@
 const Patient = require('../models/patient');
 const Doctor = require('../models/doctor');
+const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
+
+/** file_id is an alias for file_number (some clients use this name). */
+function resolveFileNumber(file_number, file_id) {
+    const v = (file_number != null ? file_number : file_id);
+    if (v === undefined || v === null) return null;
+    const s = String(v).trim();
+    return s || null;
+}
+
+function resolveMongoIdFromQueryOrBody(q) {
+    const raw = q.mongo_id || q.patient_mongo_id || q._id;
+    if (!raw) return null;
+    const s = String(raw).trim();
+    if (!s || !mongoose.Types.ObjectId.isValid(s)) return null;
+    return s;
+}
 const path = require('path');
 const fs = require('fs');
 
@@ -88,18 +105,17 @@ const uploadPatientReport = async (req, res) => {
         const trimmedPhone = patient_phone.trim();
         const trimmedDoctorId = doctor_id.trim();
         const trimmedPatientId = patient_id ? patient_id.trim() : null;
-        const trimmedFileNumber = req.body.file_number ? req.body.file_number.trim() : null;
+        const trimmedFileNumber = resolveFileNumber(req.body.file_number, req.body.file_id);
+        const mongoId = resolveMongoIdFromQueryOrBody(req.body);
         
         let patient;
 
-        // file_number is unique per doctor — use it exclusively when present to avoid
-        // phone/patient_id collisions between patients sharing the same number.
-        // Backward compat: no file_number → try phone first, then patient_id.
-        if (trimmedFileNumber) {
+        if (mongoId) {
+            patient = await Patient.findOne({ _id: mongoId, doctor_id: trimmedDoctorId });
+        }
+        if (!patient && trimmedFileNumber) {
             patient = await Patient.findOne({ file_number: trimmedFileNumber, doctor_id: trimmedDoctorId });
         }
-
-        // Fallback: no file_number (legacy records) — try phone first, then patient_id
         if (!patient && trimmedPhone) {
             patient = await Patient.findOne({ patient_phone: trimmedPhone, doctor_id: trimmedDoctorId });
         }
@@ -202,14 +218,9 @@ const uploadPatientReport = async (req, res) => {
  */
 const getPatientReports = async (req, res) => {
     try {
-        const { patient_id, patient_phone, file_number, doctor_id } = req.query;
-
-        if (!patient_id && !patient_phone) {
-            return res.status(400).json({
-                success: false,
-                message: 'Either patient_id or patient_phone is required'
-            });
-        }
+        const { patient_id, patient_phone, file_number, file_id, doctor_id } = req.query;
+        const mongoId = resolveMongoIdFromQueryOrBody(req.query);
+        const fileNum = resolveFileNumber(file_number, file_id);
 
         if (!doctor_id) {
             return res.status(400).json({
@@ -218,14 +229,22 @@ const getPatientReports = async (req, res) => {
             });
         }
 
-        // file_number is unique per doctor and is the most precise identifier.
-        // When present, use it exclusively — avoids all phone/patient_id collisions
-        // (e.g. brothers sharing the same phone or same generated patient_id).
-        // Backward compat: no file_number → fall back to original $or logic so that
-        // existing patients without a file_number continue to work.
+        // Need at least one locator: exact Mongo doc, or legacy phone/id pair
+        if (!mongoId && !patient_id && !patient_phone) {
+            return res.status(400).json({
+                success: false,
+                message: 'Provide mongo_id (preferred), or patient_id, or patient_phone'
+            });
+        }
+
+        // Priority: 1) mongo_id — exact document (dashboard/assistant always have this)
+        //           2) file_number / file_id — unique per doctor
+        //           3) legacy $or on patient_id | patient_phone
         let patientQuery;
-        if (file_number && file_number.trim() !== '') {
-            patientQuery = { doctor_id: doctor_id.trim(), file_number: file_number.trim() };
+        if (mongoId) {
+            patientQuery = { doctor_id: doctor_id.trim(), _id: mongoId };
+        } else if (fileNum) {
+            patientQuery = { doctor_id: doctor_id.trim(), file_number: fileNum };
         } else {
             const orConditions = [];
             if (patient_id && patient_id.trim() !== '') {
@@ -283,15 +302,10 @@ const getPatientReports = async (req, res) => {
  */
 const deletePatientReport = async (req, res) => {
     try {
-        const { patient_id, patient_phone, file_number, doctor_id } = req.query;
+        const { patient_id, patient_phone, file_number, file_id, doctor_id } = req.query;
         const { report_id } = req.params;
-
-        if (!patient_id && !patient_phone) {
-            return res.status(400).json({
-                success: false,
-                message: 'Either patient_id or patient_phone is required'
-            });
-        }
+        const mongoId = resolveMongoIdFromQueryOrBody(req.query);
+        const fileNum = resolveFileNumber(file_number, file_id);
 
         if (!doctor_id) {
             return res.status(400).json({
@@ -300,14 +314,18 @@ const deletePatientReport = async (req, res) => {
             });
         }
 
-        // file_number is unique per doctor and is the most precise identifier.
-        // When present, use it exclusively — avoids all phone/patient_id collisions
-        // (e.g. brothers sharing the same phone or same generated patient_id).
-        // Backward compat: no file_number → fall back to original $or logic so that
-        // existing patients without a file_number continue to work.
+        if (!mongoId && !patient_id && !patient_phone) {
+            return res.status(400).json({
+                success: false,
+                message: 'Provide mongo_id (preferred), or patient_id, or patient_phone'
+            });
+        }
+
         let patientQuery;
-        if (file_number && file_number.trim() !== '') {
-            patientQuery = { doctor_id: doctor_id.trim(), file_number: file_number.trim() };
+        if (mongoId) {
+            patientQuery = { doctor_id: doctor_id.trim(), _id: mongoId };
+        } else if (fileNum) {
+            patientQuery = { doctor_id: doctor_id.trim(), file_number: fileNum };
         } else {
             const orConditions = [];
             if (patient_id && patient_id.trim() !== '') {
@@ -382,13 +400,14 @@ const uploadPatientReportFromUrls = async (req, res) => {
         console.log('=== UPLOAD FROM URLS REQUEST RECEIVED ===');
         console.log('Request body:', JSON.stringify(req.body, null, 2));
         
-        const { patient_id, patient_phone, file_number, doctor_id, image_urls, report_type, description, uploaded_by } = req.body;
+        const { patient_id, patient_phone, file_number, file_id, doctor_id, image_urls, report_type, description, uploaded_by } = req.body;
+        const mongoId = resolveMongoIdFromQueryOrBody(req.body);
 
-        // Validate required fields
-        if (!patient_id && !patient_phone) {
+        // Validate required fields — mongo_id alone is enough (exact patient row)
+        if (!mongoId && !patient_id && !patient_phone) {
             return res.status(400).json({
                 success: false,
-                message: 'Either patient_id or patient_phone is required'
+                message: 'Provide mongo_id (preferred), or patient_id, or patient_phone'
             });
         }
 
@@ -418,18 +437,16 @@ const uploadPatientReportFromUrls = async (req, res) => {
         const trimmedPhone = patient_phone ? patient_phone.trim() : null;
         const trimmedDoctorId = doctor_id.trim();
         const trimmedPatientId = patient_id ? patient_id.trim() : null;
-        const trimmedFileNumber = file_number ? file_number.trim() : null;
+        const trimmedFileNumber = resolveFileNumber(file_number, file_id);
         
         let patient;
 
-        // file_number is unique per doctor — use it exclusively when present to avoid
-        // phone/patient_id collisions between patients sharing the same number.
-        // Backward compat: no file_number → try phone first, then patient_id.
-        if (trimmedFileNumber) {
+        if (mongoId) {
+            patient = await Patient.findOne({ _id: mongoId, doctor_id: trimmedDoctorId });
+        }
+        if (!patient && trimmedFileNumber) {
             patient = await Patient.findOne({ file_number: trimmedFileNumber, doctor_id: trimmedDoctorId });
         }
-
-        // Fallback: no file_number (legacy records) — try phone first, then patient_id
         if (!patient && trimmedPhone) {
             patient = await Patient.findOne({ patient_phone: trimmedPhone, doctor_id: trimmedDoctorId });
         }

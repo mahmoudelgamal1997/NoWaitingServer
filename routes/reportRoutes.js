@@ -54,7 +54,7 @@ router.post('/patients/reports/upload',
 
 // Upload patient report(s) from Firebase Storage URLs
 // POST /api/patients/reports/upload-urls
-// Body: JSON with fields: patient_id, patient_phone, doctor_id, image_urls[], description, uploaded_by
+// Body: JSON — mongo_id (preferred), file_number / file_id, patient_id, patient_phone, doctor_id, image_urls[], ...
 // Used by mobile apps that upload directly to Firebase Storage
 router.post('/patients/reports/upload-urls', 
     authenticateUser, 
@@ -62,8 +62,9 @@ router.post('/patients/reports/upload-urls',
 );
 
 // Get patient reports
-// GET /api/patients/reports?patient_id=xxx&doctor_id=yyy
-// or GET /api/patients/reports?patient_phone=xxx&doctor_id=yyy
+// GET /api/patients/reports?doctor_id=yyy
+// Preferred: mongo_id=<Mongo _id> (exact row) or file_number / file_id
+// Legacy: patient_id and/or patient_phone
 router.get('/patients/reports', authenticateUser, getPatientReports);
 
 // Delete a patient report
