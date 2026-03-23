@@ -237,32 +237,27 @@ const getPatientReports = async (req, res) => {
             });
         }
 
-        // Priority: 1) mongo_id — exact document (dashboard/assistant always have this)
-        //           2) file_number / file_id — unique per doctor
-        //           3) legacy $or on patient_id | patient_phone
-        let patientQuery;
-        if (mongoId) {
-            patientQuery = { doctor_id: doctor_id.trim(), _id: mongoId };
-        } else if (fileNum) {
-            patientQuery = { doctor_id: doctor_id.trim(), file_number: fileNum };
-        } else {
-            const orConditions = [];
-            if (patient_id && patient_id.trim() !== '') {
-                orConditions.push({ patient_id: patient_id.trim() });
-            }
-            if (patient_phone && patient_phone.trim() !== '') {
-                orConditions.push({ patient_phone: patient_phone.trim() });
-            }
-            if (orConditions.length === 0) {
-                return res.status(400).json({
+        // Sequential lookup — most-to-least precise, NO $or mixing phone+id
+        // (mixing caused brothers sharing a phone to cross-contaminate each other's reports)
+        const dr = doctor_id.trim();
+        let patient = null;
+        if (mongoId)                                  patient = await Patient.findOne({ _id: mongoId,                       doctor_id: dr });
+        if (!patient && fileNum)                      patient = await Patient.findOne({ file_number: fileNum,               doctor_id: dr });
+        if (!patient && patient_id?.trim())           patient = await Patient.findOne({ patient_id: patient_id.trim(),      doctor_id: dr });
+        if (!patient && patient_phone?.trim())        patient = await Patient.findOne({ patient_phone: patient_phone.trim(), doctor_id: dr });
+
+        if (patient) {
+            // Narrow result: if caller gave a specific patient_id but we fell back to phone and
+            // got a DIFFERENT patient, reject — caller must send file_number or mongo_id to distinguish.
+            if (patient_id?.trim() && patient.patient_id !== patient_id.trim()) {
+                return res.status(404).json({
                     success: false,
-                    message: 'Either patient_id or patient_phone must be provided and non-empty'
+                    message: 'Patient not found for the given patient_id. Multiple patients share this phone — send file_number or mongo_id to disambiguate.'
                 });
             }
-            patientQuery = { doctor_id: doctor_id.trim(), $or: orConditions };
         }
 
-        const patient = await Patient.findOne(patientQuery).select('reports patient_id patient_name patient_phone');
+        patient = patient ? await Patient.findOne({ _id: patient._id }).select('reports patient_id patient_name patient_phone') : null;
 
         if (!patient) {
             return res.status(404).json({
@@ -321,29 +316,19 @@ const deletePatientReport = async (req, res) => {
             });
         }
 
-        let patientQuery;
-        if (mongoId) {
-            patientQuery = { doctor_id: doctor_id.trim(), _id: mongoId };
-        } else if (fileNum) {
-            patientQuery = { doctor_id: doctor_id.trim(), file_number: fileNum };
-        } else {
-            const orConditions = [];
-            if (patient_id && patient_id.trim() !== '') {
-                orConditions.push({ patient_id: patient_id.trim() });
-            }
-            if (patient_phone && patient_phone.trim() !== '') {
-                orConditions.push({ patient_phone: patient_phone.trim() });
-            }
-            if (orConditions.length === 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Either patient_id or patient_phone must be provided and non-empty'
-                });
-            }
-            patientQuery = { doctor_id: doctor_id.trim(), $or: orConditions };
-        }
+        const dr2 = doctor_id.trim();
+        let patient = null;
+        if (mongoId)                                  patient = await Patient.findOne({ _id: mongoId,                        doctor_id: dr2 });
+        if (!patient && fileNum)                      patient = await Patient.findOne({ file_number: fileNum,                doctor_id: dr2 });
+        if (!patient && patient_id?.trim())           patient = await Patient.findOne({ patient_id: patient_id.trim(),       doctor_id: dr2 });
+        if (!patient && patient_phone?.trim())        patient = await Patient.findOne({ patient_phone: patient_phone.trim(),  doctor_id: dr2 });
 
-        const patient = await Patient.findOne(patientQuery);
+        if (patient && patient_id?.trim() && patient.patient_id !== patient_id.trim()) {
+            return res.status(404).json({
+                success: false,
+                message: 'Patient not found for the given patient_id. Send file_number or mongo_id to disambiguate.'
+            });
+        }
 
         if (!patient) {
             return res.status(404).json({
