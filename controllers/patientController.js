@@ -1288,14 +1288,8 @@ const updatePatientVisitType = async (req, res) => {
             });
         }
 
-        // 1. Get patient current data
+        // 1. Get patient current data (may be null for waiting-list patients not yet synced to MongoDB)
         const patient = await Patient.findOne({ patient_id });
-        if (!patient) {
-            return res.status(404).json({
-                success: false,
-                message: 'Patient not found'
-            });
-        }
 
         // 2. Determine new price
         // Priority 1: Doctor Settings (Simple mode - used by Dashboard)
@@ -1402,43 +1396,41 @@ const updatePatientVisitType = async (req, res) => {
             }
         }
 
-        // 4. Save change history
-        if (!patient.visit_type_change_history) {
-            patient.visit_type_change_history = [];
+        // 4 & 5. Update patient record if it exists in MongoDB (not yet synced for waiting-list patients)
+        if (patient) {
+            if (!patient.visit_type_change_history) {
+                patient.visit_type_change_history = [];
+            }
+
+            patient.visit_type_change_history.push({
+                from_type: patient.visit_type,
+                to_type: visit_type,
+                from_urgency: patient.visit_urgency || 'normal',
+                to_urgency: visit_urgency || 'normal',
+                old_price: oldPrice,
+                new_price: newPrice,
+                changed_by: changed_by || 'doctor',
+                changed_at: new Date(),
+                reason: reason || 'Updated from dashboard'
+            });
+
+            patient.visit_type = visit_type;
+            patient.visit_urgency = visit_urgency || 'normal';
+            patient.visit_type_changed = true;
+
+            if (patient.visits && patient.visits.length > 0) {
+                patient.visits.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+                patient.visits[0].visit_type = visit_type;
+            }
+
+            await patient.save();
         }
-
-        patient.visit_type_change_history.push({
-            from_type: patient.visit_type,
-            to_type: visit_type,
-            from_urgency: patient.visit_urgency || 'normal',
-            to_urgency: visit_urgency || 'normal',
-            old_price: oldPrice,
-            new_price: newPrice,
-            changed_by: changed_by || 'doctor',
-            changed_at: new Date(),
-            reason: reason || 'Updated from dashboard'
-        });
-
-        // 5. Update patient record
-        patient.visit_type = visit_type; // Keep original ID/Value as requested
-        patient.visit_urgency = visit_urgency || 'normal';
-        patient.visit_type_changed = true;
-
-        // NEW: Sync the visit_type to the latest visit in the history array
-        if (patient.visits && patient.visits.length > 0) {
-            // Sort by date descending to find the latest visit
-            patient.visits.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
-            // Update the latest visit
-            patient.visits[0].visit_type = visit_type;
-        }
-
-        await patient.save();
 
         res.status(200).json({
             success: true,
             message: 'Visit type updated successfully',
             data: {
-                patient,
+                patient: patient || null,
                 newPrice,
                 oldPrice,
                 priceDifference: newPrice - oldPrice,
