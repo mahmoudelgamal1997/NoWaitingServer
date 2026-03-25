@@ -70,6 +70,14 @@ const drugSchema = new mongoose.Schema({
     timing: {
         type: String,
         default: ""
+    },
+    form: {
+        type: String,
+        default: ""
+    },
+    route: {
+        type: String,
+        default: ""
     }
 });
 
