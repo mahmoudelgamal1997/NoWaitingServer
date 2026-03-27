@@ -22,6 +22,7 @@ const medicalReportRoutes = require('./routes/medicalReportRoutes');
 const referralRoutes = require('./routes/referralRoutes');
 const packageRoutes = require('./routes/packageRoutes');
 const medicineRoutes = require('./routes/medicineRoutes');
+const attendanceRoutes = require('./routes/attendanceRoutes');
 
 const cors = require('cors');
 
@@ -108,6 +109,7 @@ app.use('/api', medicalReportRoutes);
 app.use('/api', referralRoutes);
 app.use('/api', packageRoutes);
 app.use('/api', medicineRoutes);
+app.use('/api', attendanceRoutes);
 
 // Error handling middleware - must be after routes
 app.use((err, req, res, next) => {
