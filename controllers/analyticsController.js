@@ -43,7 +43,8 @@ const getRevenueOverview = async (req, res) => {
                     totalServicesRevenue: { $sum: '$servicesTotal' },
                     totalDiscounts: { $sum: { $ifNull: ['$discount.amount', 0] } },
                     totalBillings: { $sum: 1 },
-                    totalAmountPaid: { $sum: '$amountPaid' }
+                    totalAmountPaid: { $sum: '$amountPaid' },
+                    uniquePatients: { $addToSet: '$patient_id' }
                 }
             }
         ]);
@@ -79,12 +80,15 @@ const getRevenueOverview = async (req, res) => {
             totalServicesRevenue: 0,
             totalDiscounts: 0,
             totalBillings: 0,
-            totalAmountPaid: 0
+            totalAmountPaid: 0,
+            uniquePatients: []
         };
 
-        // Add calculated fields
-        overview.averageBillValue = overview.totalBillings > 0 
-            ? Math.round(overview.totalRevenue / overview.totalBillings * 100) / 100 
+        // Use unique patient count for visit display and average calculation
+        const uniqueCount = overview.uniquePatients.length;
+        overview.totalBillings = uniqueCount;
+        overview.averageBillValue = uniqueCount > 0
+            ? Math.round(overview.totalRevenue / uniqueCount * 100) / 100
             : 0;
         overview.pendingAmount = overview.totalRevenue - overview.totalAmountPaid;
 
@@ -421,14 +425,14 @@ const getClinicPerformance = async (req, res) => {
             message: 'Clinic performance metrics retrieved successfully',
             data: {
                 overview: {
-                    totalVisits: overall.totalVisits,
+                    totalVisits: overall.uniquePatients.length,
                     totalRevenue: overall.totalRevenue,
                     totalConsultationFees: overall.totalConsultationFees,
                     totalServicesRevenue: overall.totalServicesRevenue,
                     totalDiscounts: overall.totalDiscounts,
                     uniquePatientCount: overall.uniquePatients.length,
-                    averageBillValue: overall.totalVisits > 0 
-                        ? Math.round(overall.totalRevenue / overall.totalVisits * 100) / 100 
+                    averageBillValue: overall.uniquePatients.length > 0 
+                        ? Math.round(overall.totalRevenue / overall.uniquePatients.length * 100) / 100 
                         : 0
                 },
                 mostUsedServices,
