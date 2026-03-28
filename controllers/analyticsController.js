@@ -43,7 +43,8 @@ const getRevenueOverview = async (req, res) => {
                     totalServicesRevenue: { $sum: '$servicesTotal' },
                     totalDiscounts: { $sum: { $ifNull: ['$discount.amount', 0] } },
                     totalBillings: { $sum: 1 },
-                    totalAmountPaid: { $sum: '$amountPaid' }
+                    totalAmountPaid: { $sum: '$amountPaid' },
+                    uniquePatients: { $addToSet: '$patient_id' }
                 }
             }
         ]);
@@ -73,20 +74,31 @@ const getRevenueOverview = async (req, res) => {
             };
         });
 
-        const overview = result[0] || {
+        const rawOverview = result[0] || {
             totalRevenue: 0,
             totalConsultationFees: 0,
             totalServicesRevenue: 0,
             totalDiscounts: 0,
             totalBillings: 0,
-            totalAmountPaid: 0
+            totalAmountPaid: 0,
+            uniquePatients: []
         };
 
-        // Add calculated fields
-        overview.averageBillValue = overview.totalBillings > 0 
-            ? Math.round(overview.totalRevenue / overview.totalBillings * 100) / 100 
-            : 0;
-        overview.pendingAmount = overview.totalRevenue - overview.totalAmountPaid;
+        // totalVisits = number of unique patients (not raw billing document count)
+        const totalVisits = rawOverview.uniquePatients.length;
+
+        const overview = {
+            totalRevenue: rawOverview.totalRevenue,
+            totalConsultationFees: rawOverview.totalConsultationFees,
+            totalServicesRevenue: rawOverview.totalServicesRevenue,
+            totalDiscounts: rawOverview.totalDiscounts,
+            totalBillings: totalVisits,
+            totalAmountPaid: rawOverview.totalAmountPaid,
+            averageBillValue: totalVisits > 0
+                ? Math.round(rawOverview.totalRevenue / totalVisits * 100) / 100
+                : 0,
+            pendingAmount: rawOverview.totalRevenue - rawOverview.totalAmountPaid
+        };
 
         res.status(200).json({
             success: true,
@@ -416,19 +428,22 @@ const getClinicPerformance = async (req, res) => {
             uniquePatients: []
         };
 
+        // Use unique patient count as the canonical visit metric
+        const uniquePatientCount = overall.uniquePatients.length;
+
         res.status(200).json({
             success: true,
             message: 'Clinic performance metrics retrieved successfully',
             data: {
                 overview: {
-                    totalVisits: overall.totalVisits,
+                    totalVisits: uniquePatientCount,
                     totalRevenue: overall.totalRevenue,
                     totalConsultationFees: overall.totalConsultationFees,
                     totalServicesRevenue: overall.totalServicesRevenue,
                     totalDiscounts: overall.totalDiscounts,
-                    uniquePatientCount: overall.uniquePatients.length,
-                    averageBillValue: overall.totalVisits > 0 
-                        ? Math.round(overall.totalRevenue / overall.totalVisits * 100) / 100 
+                    uniquePatientCount,
+                    averageBillValue: uniquePatientCount > 0 
+                        ? Math.round(overall.totalRevenue / uniquePatientCount * 100) / 100 
                         : 0
                 },
                 mostUsedServices,

@@ -439,6 +439,27 @@ const recordConsultation = async (req, res) => {
             });
         }
 
+        // Dedup guard: if a billing already exists for this patient+doctor today, return it
+        // instead of creating a duplicate. This prevents double-billing when the manual
+        // "record consultation" button is pressed while auto-billing already ran on queue entry.
+        const today = new Date();
+        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+        const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+        const existingTodayBilling = await Billing.findOne({
+            patient_id,
+            doctor_id,
+            billingDate: { $gte: todayStart, $lte: todayEnd }
+        });
+
+        if (existingTodayBilling) {
+            console.log(`Skipping duplicate consultation billing for patient ${patient_id} - already billed today`);
+            return res.status(200).json({
+                success: true,
+                message: 'Consultation already recorded for this patient today',
+                data: existingTodayBilling
+            });
+        }
+
         const billing = new Billing({
             billing_id: uuidv4(),
             doctor_id,
