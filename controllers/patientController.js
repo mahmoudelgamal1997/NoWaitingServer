@@ -321,26 +321,6 @@ const savePatient = async (req, res) => {
         }
 
         if (existingPatient) {
-            // Dedup guard: if a billing was already created for this patient+doctor in the
-            // last 5 minutes it means the request succeeded but the client timed out waiting
-            // for a response and is now retrying. Return the existing patient state instead
-            // of creating a duplicate visit entry and billing record.
-            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-            const recentBilling = await Billing.findOne({
-                patient_id: existingPatient.patient_id,
-                doctor_id,
-                billingDate: { $gte: fiveMinutesAgo }
-            });
-
-            if (recentBilling) {
-                console.log(`Skipping duplicate visit+billing for ${existingPatient.patient_name} - already added within last 5 minutes`);
-                return res.status(200).json({
-                    message: 'New visit added for existing patient',
-                    patient: normalizePatientTimeForResponse(existingPatient),
-                    visit: existingPatient.visits[existingPatient.visits.length - 1]
-                });
-            }
-
             // Generate a unique visit ID
             const visit_id = uuidv4();
 
