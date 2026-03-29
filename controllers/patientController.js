@@ -342,6 +342,13 @@ const savePatient = async (req, res) => {
             if (status) existingPatient.status = status;
             if (position) existingPatient.position = position;
 
+            // Always update the top-level date/time to the current visit date so the
+            // dashboard date filter (which reads patient.date) shows returning patients
+            // correctly in today's list instead of filtering them out by their original
+            // registration date.
+            if (date) existingPatient.date = date;
+            if (time) existingPatient.time = time;
+
             // Update other patient info if provided (might have changed)
             if (patient_name) existingPatient.patient_name = patient_name;
             if (age) existingPatient.age = age;
