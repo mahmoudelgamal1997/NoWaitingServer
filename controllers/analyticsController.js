@@ -25,9 +25,26 @@ const getRevenueOverview = async (req, res) => {
             paymentStatus: { $ne: 'cancelled' }
         };
 
+        // Two-stage aggregation: deduplicate by patient first, then sum totals.
+        // This prevents inflated revenue when a patient has multiple billing records
+        // (e.g. from "enter doctor → return to waiting → enter doctor" flow).
         const result = await Billing.aggregate([
             { $match: matchStage },
+            { $sort: { billingDate: 1 } }, // oldest first → $first keeps the original billing
             {
+                // Stage 1: one record per patient (deduplicate)
+                $group: {
+                    _id: '$patient_id',
+                    totalAmount: { $first: '$totalAmount' },
+                    consultationFee: { $first: '$consultationFee' },
+                    servicesTotal: { $first: '$servicesTotal' },
+                    discountAmount: { $first: { $ifNull: ['$discount.amount', 0] } },
+                    amountPaid: { $first: '$amountPaid' },
+                    paymentStatus: { $first: '$paymentStatus' }
+                }
+            },
+            {
+                // Stage 2: sum across all unique patients
                 $group: {
                     _id: null,
                     totalRevenue: {
@@ -41,17 +58,26 @@ const getRevenueOverview = async (req, res) => {
                     },
                     totalConsultationFees: { $sum: '$consultationFee' },
                     totalServicesRevenue: { $sum: '$servicesTotal' },
-                    totalDiscounts: { $sum: { $ifNull: ['$discount.amount', 0] } },
-                    totalBillings: { $sum: 1 },
+                    totalDiscounts: { $sum: '$discountAmount' },
                     totalAmountPaid: { $sum: '$amountPaid' },
-                    uniquePatients: { $addToSet: '$patient_id' }
+                    uniquePatientCount: { $sum: 1 }
                 }
             }
         ]);
 
-        // Get consultation type breakdown (كشف vs اعاده كشف)
+        // Consultation type breakdown — also deduplicated per patient
         const consultationBreakdown = await Billing.aggregate([
             { $match: matchStage },
+            { $sort: { billingDate: 1 } },
+            {
+                // Keep only the first billing per patient
+                $group: {
+                    _id: '$patient_id',
+                    consultationType: { $first: '$consultationType' },
+                    consultationFee: { $first: '$consultationFee' },
+                    totalAmount: { $first: '$totalAmount' }
+                }
+            },
             {
                 $group: {
                     _id: '$consultationType',
@@ -74,23 +100,28 @@ const getRevenueOverview = async (req, res) => {
             };
         });
 
-        const overview = result[0] || {
+        const raw = result[0] || {
             totalRevenue: 0,
             totalConsultationFees: 0,
             totalServicesRevenue: 0,
             totalDiscounts: 0,
-            totalBillings: 0,
             totalAmountPaid: 0,
-            uniquePatients: []
+            uniquePatientCount: 0
         };
 
-        // Use unique patient count for visit display and average calculation
-        const uniqueCount = overview.uniquePatients.length;
-        overview.totalBillings = uniqueCount;
-        overview.averageBillValue = uniqueCount > 0
-            ? Math.round(overview.totalRevenue / uniqueCount * 100) / 100
-            : 0;
-        overview.pendingAmount = overview.totalRevenue - overview.totalAmountPaid;
+        const uniqueCount = raw.uniquePatientCount;
+        const overview = {
+            totalRevenue: raw.totalRevenue,
+            totalConsultationFees: raw.totalConsultationFees,
+            totalServicesRevenue: raw.totalServicesRevenue,
+            totalDiscounts: raw.totalDiscounts,
+            totalBillings: uniqueCount,
+            totalAmountPaid: raw.totalAmountPaid,
+            averageBillValue: uniqueCount > 0
+                ? Math.round(raw.totalRevenue / uniqueCount * 100) / 100
+                : 0,
+            pendingAmount: raw.totalRevenue - raw.totalAmountPaid
+        };
 
         res.status(200).json({
             success: true,
@@ -307,13 +338,27 @@ const getClinicPerformance = async (req, res) => {
             paymentStatus: { $ne: 'cancelled' }
         };
 
-        // Overall metrics
+        // Overall metrics — deduplicate by patient first to avoid counting duplicate billings
         const overallResult = await Billing.aggregate([
             { $match: matchStage },
+            { $sort: { billingDate: 1 } },
             {
+                // Stage 1: one record per patient
+                $group: {
+                    _id: '$patient_id',
+                    totalAmount: { $first: '$totalAmount' },
+                    consultationFee: { $first: '$consultationFee' },
+                    servicesTotal: { $first: '$servicesTotal' },
+                    discountAmount: { $first: { $ifNull: ['$discount.amount', 0] } },
+                    amountPaid: { $first: '$amountPaid' },
+                    paymentStatus: { $first: '$paymentStatus' }
+                }
+            },
+            {
+                // Stage 2: totals across all unique patients
                 $group: {
                     _id: null,
-                    totalVisits: { $sum: 1 },
+                    uniquePatientCount: { $sum: 1 },
                     totalRevenue: {
                         $sum: {
                             $cond: [
@@ -325,10 +370,18 @@ const getClinicPerformance = async (req, res) => {
                     },
                     totalConsultationFees: { $sum: '$consultationFee' },
                     totalServicesRevenue: { $sum: '$servicesTotal' },
-                    totalDiscounts: { $sum: { $ifNull: ['$discount.amount', 0] } },
-                    uniquePatients: { $addToSet: '$patient_id' }
+                    totalDiscounts: { $sum: '$discountAmount' }
                 }
             }
+        ]);
+
+        // Consultation type breakdown — deduplicated per patient
+        const consultationTypes = await Billing.aggregate([
+            { $match: matchStage },
+            { $sort: { billingDate: 1 } },
+            { $group: { _id: '$patient_id', consultationType: { $first: '$consultationType' }, revenue: { $first: '$consultationFee' } } },
+            { $group: { _id: '$consultationType', count: { $sum: 1 }, revenue: { $sum: '$revenue' } } },
+            { $sort: { count: -1 } }
         ]);
 
         // Most used services
@@ -385,19 +438,6 @@ const getClinicPerformance = async (req, res) => {
             }
         ]);
 
-        // Consultation type breakdown
-        const consultationTypes = await Billing.aggregate([
-            { $match: matchStage },
-            {
-                $group: {
-                    _id: '$consultationType',
-                    count: { $sum: 1 },
-                    revenue: { $sum: '$consultationFee' }
-                }
-            },
-            { $sort: { count: -1 } }
-        ]);
-
         // Payment method breakdown
         const paymentMethods = await Billing.aggregate([
             { $match: matchStage },
@@ -412,27 +452,28 @@ const getClinicPerformance = async (req, res) => {
         ]);
 
         const overall = overallResult[0] || {
-            totalVisits: 0,
+            uniquePatientCount: 0,
             totalRevenue: 0,
             totalConsultationFees: 0,
             totalServicesRevenue: 0,
-            totalDiscounts: 0,
-            uniquePatients: []
+            totalDiscounts: 0
         };
+
+        const uniqueCount = overall.uniquePatientCount;
 
         res.status(200).json({
             success: true,
             message: 'Clinic performance metrics retrieved successfully',
             data: {
                 overview: {
-                    totalVisits: overall.uniquePatients.length,
+                    totalVisits: uniqueCount,
                     totalRevenue: overall.totalRevenue,
                     totalConsultationFees: overall.totalConsultationFees,
                     totalServicesRevenue: overall.totalServicesRevenue,
                     totalDiscounts: overall.totalDiscounts,
-                    uniquePatientCount: overall.uniquePatients.length,
-                    averageBillValue: overall.uniquePatients.length > 0 
-                        ? Math.round(overall.totalRevenue / overall.uniquePatients.length * 100) / 100 
+                    uniquePatientCount: uniqueCount,
+                    averageBillValue: uniqueCount > 0
+                        ? Math.round(overall.totalRevenue / uniqueCount * 100) / 100
                         : 0
                 },
                 mostUsedServices,
