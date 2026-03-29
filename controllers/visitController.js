@@ -217,34 +217,54 @@ const getPatientVisitHistory = async (req, res) => {
             });
         }
 
-        // EXISTING PATH: single doctor + patient lookup — unchanged for all current users
+        // EXISTING PATH: single doctor + patient lookup
         const patient = await Patient.findOne({ patient_id, doctor_id });
         
         if (!patient) {
             return res.status(404).json({ message: 'Patient not found' });
         }
 
-        // Merge visits + all_visits and dedupe by visit_id so we return full history
-        const allVisitsArr = patient.all_visits || [];
-        const visitsArr = patient.visits || [];
+        // Find sibling documents that share the same file_number (same person,
+        // multiple Mongo docs created due to slight name variations).
+        // Merge visits, all_visits, and complaint_history from all of them.
+        let allDocs = [patient];
+        if (patient.file_number) {
+            const siblings = await Patient.find({
+                doctor_id,
+                file_number: patient.file_number,
+                _id: { $ne: patient._id }
+            });
+            if (siblings.length > 0) allDocs = [patient, ...siblings];
+        }
+
         const seen = new Set();
         const sourceVisits = [];
-        for (const v of [...allVisitsArr, ...visitsArr]) {
-            const id = v.visit_id || v.billing_id || v._id?.toString?.() || '';
-            if (!id || !seen.has(id)) {
-                if (id) seen.add(id);
-                sourceVisits.push(v);
+        const compSeen = new Set();
+        const mergedComplaints = [];
+
+        for (const doc of allDocs) {
+            for (const v of [...(doc.all_visits || []), ...(doc.visits || [])]) {
+                const id = v.visit_id || v.billing_id || v._id?.toString?.() || '';
+                if (!id || !seen.has(id)) {
+                    if (id) seen.add(id);
+                    sourceVisits.push(v);
+                }
+            }
+            for (const c of (doc.complaint_history || [])) {
+                const cid = c._id?.toString?.() || '';
+                if (!cid || !compSeen.has(cid)) {
+                    if (cid) compSeen.add(cid);
+                    mergedComplaints.push(c);
+                }
             }
         }
 
-        // Sort visits by date in descending order (most recent first)
-        const sortedVisits = [...sourceVisits].sort((a, b) => {
+        const sortedVisits = sourceVisits.sort((a, b) => {
             const dateA = new Date(a.date || 0);
             const dateB = new Date(b.date || 0);
             return dateB.getTime() - dateA.getTime();
         });
 
-        // Implement pagination
         const startIndex = (page - 1) * limit;
         const endIndex = page * limit;
         const paginatedVisits = sortedVisits.slice(startIndex, endIndex);
@@ -263,7 +283,7 @@ const getPatientVisitHistory = async (req, res) => {
                 totalVisits: sortedVisits.length
             },
             visits: paginatedVisits,
-            complaint_history: [...(patient.complaint_history || [])].sort((a, b) => new Date(b.date) - new Date(a.date))
+            complaint_history: mergedComplaints.sort((a, b) => new Date(b.date) - new Date(a.date))
         });
     } catch (error) {
         console.error('Error retrieving patient visit history:', error);

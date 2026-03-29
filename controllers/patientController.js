@@ -265,10 +265,16 @@ const savePatient = async (req, res) => {
         const normalized = normalizePhone(patient_phone);
         const normalizedPatientName = normalizeName(patient_name);
 
-        // Find existing patient: same doctor + same phone + same name (≥95% similarity)
-        // This prevents merging different family members who share a phone number.
+        // Match by file_number first — most reliable identifier for returning patients.
+        // The assistant portal resolves the file_number before calling savePatient,
+        // so even if the name was typed slightly differently, the same file_number
+        // means it's the same person and we must reuse the existing record.
         let existingPatient = null;
-        if (normalized) {
+        if (trimmedFileNumber) {
+            existingPatient = await Patient.findOne({ doctor_id, file_number: trimmedFileNumber });
+        }
+        // Fall back to phone + name similarity matching
+        if (!existingPatient && normalized) {
             const phoneMatches = await Patient.find({ doctor_id, normalized_phone: normalized });
             existingPatient = phoneMatches.find((p) => {
                 // If the stored record has a normalized_name, use similarity check
@@ -1079,26 +1085,77 @@ const getAllPatients = async (req, res) => {
         console.log('Sort object:', sortObject);
         console.log('Filter object:', filter);
 
-        // Handle pagination
-        let patients;
-        let totalCount;
+        // Fetch all matching patients first, then merge duplicates by file_number,
+        // then apply pagination — same approach as getPatientsByDoctor.
+        const allRawPatients = await Patient.find(filter).sort(sortObject);
+
+        // Merge patients that share the same file_number (same person, multiple docs)
+        const mergeMap = new Map();
+        for (const rawP of allRawPatients) {
+            const p = (rawP.toObject && typeof rawP.toObject === 'function')
+                ? rawP.toObject() : JSON.parse(JSON.stringify(rawP));
+
+            let mergeKey;
+            if (p.file_number) {
+                mergeKey = p.file_number;
+            } else {
+                const normName = p.normalized_name || normalizeName(p.patient_name) || '';
+                mergeKey = `${p.patient_phone}::${normName}`;
+            }
+
+            // Combine visits + all_visits, dedup
+            const vSeen = new Set();
+            const combined = [];
+            for (const v of [...(p.all_visits || []), ...(p.visits || [])]) {
+                const vid = v.visit_id || v._id?.toString?.() || '';
+                if (!vid || !vSeen.has(vid)) { if (vid) vSeen.add(vid); combined.push(v); }
+            }
+            p.visits = combined;
+            p.all_visits = [];
+
+            if (mergeMap.has(mergeKey)) {
+                const existing = mergeMap.get(mergeKey);
+                // Merge visits
+                const eIds = new Set(existing.visits.map(v => v.visit_id || v._id?.toString?.() || ''));
+                for (const v of p.visits) {
+                    const vid = v.visit_id || v._id?.toString?.() || '';
+                    if (!vid || !eIds.has(vid)) { eIds.add(vid); existing.visits.push(v); }
+                }
+                existing.visits.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+                // Merge reports
+                const rIds = new Set((existing.reports || []).map(r => r.report_id || r._id?.toString?.() || ''));
+                for (const r of (p.reports || [])) {
+                    const rid = r.report_id || r._id?.toString?.() || '';
+                    if (!rid || !rIds.has(rid)) { rIds.add(rid); if (!existing.reports) existing.reports = []; existing.reports.push(r); }
+                }
+                // Merge complaint_history
+                const cIds = new Set((existing.complaint_history || []).map(c => c._id?.toString?.() || ''));
+                for (const c of (p.complaint_history || [])) {
+                    const cid = c._id?.toString?.() || '';
+                    if (!cid || !cIds.has(cid)) { cIds.add(cid); if (!existing.complaint_history) existing.complaint_history = []; existing.complaint_history.push(c); }
+                }
+                // Keep most recent info
+                if (new Date(p.updatedAt || 0) > new Date(existing.updatedAt || 0)) {
+                    existing.patient_name = p.patient_name || existing.patient_name;
+                    existing.age = p.age || existing.age;
+                    existing.address = p.address || existing.address;
+                    existing.date = p.date || existing.date;
+                    existing.time = p.time || existing.time;
+                    existing.status = p.status || existing.status;
+                }
+            } else {
+                mergeMap.set(mergeKey, p);
+            }
+        }
+
+        let mergedPatients = Array.from(mergeMap.values());
+        let totalCount = mergedPatients.length;
         let paginationInfo = null;
 
         if (page !== undefined || limit !== undefined) {
             const pageNum = parseInt(page) || 1;
             const limitNum = parseInt(limit) || 20;
             const skip = (pageNum - 1) * limitNum;
-
-            // Get total count for pagination
-            totalCount = await Patient.countDocuments(filter);
-
-            // Fetch paginated results
-            patients = await Patient.find(filter)
-                .sort(sortObject)
-                .skip(skip)
-                .limit(limitNum);
-
-            // Build pagination info
             const totalPages = Math.ceil(totalCount / limitNum);
             paginationInfo = {
                 currentPage: pageNum,
@@ -1110,11 +1167,10 @@ const getAllPatients = async (req, res) => {
                 nextPage: pageNum < totalPages ? pageNum + 1 : null,
                 prevPage: pageNum > 1 ? pageNum - 1 : null
             };
-        } else {
-            // No pagination - return all matching records
-            patients = await Patient.find(filter).sort(sortObject);
-            totalCount = patients.length;
+            mergedPatients = mergedPatients.slice(skip, skip + limitNum);
         }
+
+        const patients = mergedPatients;
 
         // Fetch external service request counts for patients
         // Only if doctor_id is specified (for performance)
