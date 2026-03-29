@@ -224,15 +224,20 @@ const getPatientVisitHistory = async (req, res) => {
             return res.status(404).json({ message: 'Patient not found' });
         }
 
-        // Find sibling documents that share the same file_number (same person,
+        // Find sibling documents that share the same file_number AND phone (same person,
         // multiple Mongo docs created due to slight name variations).
-        // Merge visits, all_visits, and complaint_history from all of them.
+        // We verify phone to avoid merging different people who accidentally share a file_number.
         let allDocs = [patient];
         if (patient.file_number) {
-            const siblings = await Patient.find({
+            const patientNormPhone = patient.normalized_phone || normalizePhone(patient.patient_phone);
+            const allSiblings = await Patient.find({
                 doctor_id,
                 file_number: patient.file_number,
                 _id: { $ne: patient._id }
+            });
+            const siblings = allSiblings.filter(s => {
+                const sNorm = s.normalized_phone || normalizePhone(s.patient_phone);
+                return sNorm === patientNormPhone;
             });
             if (siblings.length > 0) allDocs = [patient, ...siblings];
         }

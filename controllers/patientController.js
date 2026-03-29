@@ -265,13 +265,19 @@ const savePatient = async (req, res) => {
         const normalized = normalizePhone(patient_phone);
         const normalizedPatientName = normalizeName(patient_name);
 
-        // Match by file_number first — most reliable identifier for returning patients.
+        // Match by file_number + phone first — most reliable identifier for returning patients.
         // The assistant portal resolves the file_number before calling savePatient,
         // so even if the name was typed slightly differently, the same file_number
         // means it's the same person and we must reuse the existing record.
+        // We also verify the phone matches to avoid merging different people who
+        // accidentally share the same file_number.
         let existingPatient = null;
-        if (trimmedFileNumber) {
-            existingPatient = await Patient.findOne({ doctor_id, file_number: trimmedFileNumber });
+        if (trimmedFileNumber && normalized) {
+            const fnCandidates = await Patient.find({ doctor_id, file_number: trimmedFileNumber });
+            existingPatient = fnCandidates.find(p => {
+                const pNorm = p.normalized_phone || normalizePhone(p.patient_phone);
+                return pNorm === normalized;
+            }) || null;
         }
         // Fall back to phone + name similarity matching
         if (!existingPatient && normalized) {
@@ -662,9 +668,11 @@ const getPatientsByDoctor = async (req, res) => {
             return filtered;
         };
 
-        // Group patients by identity (file_number or phone+name) and merge visits.
-        // Patients with DIFFERENT file_numbers are separate people (e.g. family members
-        // sharing a phone) and must NOT be merged together.
+        // Group patients by identity and merge duplicate records for the SAME person.
+        // Merge key = file_number + phone so that:
+        //   - Same file_number + same phone = merged (same person, duplicate docs)
+        //   - Same file_number + different phone = NOT merged (different people, accidental same file_number)
+        //   - Different file_number + same phone = NOT merged (family members sharing a phone)
         const patientsMap = new Map();
 
         allPatients.forEach(rawPatient => {
@@ -673,7 +681,8 @@ const getPatientsByDoctor = async (req, res) => {
 
             let mergeKey;
             if (patient.file_number) {
-                mergeKey = patient.file_number;
+                const normPhone = patient.normalized_phone || normalizePhone(patient.patient_phone) || patient.patient_phone;
+                mergeKey = `${patient.file_number}::${normPhone}`;
             } else {
                 const normName = patient.normalized_name || normalizeName(patient.patient_name) || '';
                 mergeKey = `${patient.patient_phone}::${normName}`;
@@ -946,13 +955,14 @@ const getAllPatients = async (req, res) => {
             const sortObj = { createdAt: sortOrder === 'asc' ? 1 : -1 };
             const allScopePatients = await Patient.find(scopeFilter).sort(sortObj);
 
-            // Merge by file_number (or phone+name for legacy records without file_number)
+            // Merge by file_number+phone (or phone+name for legacy records without file_number)
             const phoneMap = new Map();
             for (const p of allScopePatients) {
                 const po = p.toObject ? p.toObject() : { ...p };
                 let key;
                 if (po.file_number) {
-                    key = po.file_number;
+                    const normPhone = po.normalized_phone || normalizePhone(po.patient_phone) || po.patient_phone;
+                    key = `${po.file_number}::${normPhone}`;
                 } else {
                     const normPhone = po.normalized_phone || normalizePhone(po.patient_phone) || po.patient_phone;
                     const normName = po.normalized_name || normalizeName(po.patient_name) || '';
@@ -1097,7 +1107,8 @@ const getAllPatients = async (req, res) => {
 
             let mergeKey;
             if (p.file_number) {
-                mergeKey = p.file_number;
+                const normPhone = p.normalized_phone || normalizePhone(p.patient_phone) || p.patient_phone;
+                mergeKey = `${p.file_number}::${normPhone}`;
             } else {
                 const normName = p.normalized_name || normalizeName(p.patient_name) || '';
                 mergeKey = `${p.patient_phone}::${normName}`;
