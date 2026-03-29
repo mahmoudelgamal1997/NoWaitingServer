@@ -656,43 +656,104 @@ const getPatientsByDoctor = async (req, res) => {
             return filtered;
         };
 
-        // Group patients by phone number and merge visits
-        // This ensures patients with same phone number are treated as one user
+        // Group patients by identity (file_number or phone+name) and merge visits.
+        // Patients with DIFFERENT file_numbers are separate people (e.g. family members
+        // sharing a phone) and must NOT be merged together.
         const patientsMap = new Map();
 
-        allPatients.forEach(patient => {
-            const phoneKey = patient.patient_phone;
+        allPatients.forEach(rawPatient => {
+            const patient = (rawPatient.toObject && typeof rawPatient.toObject === 'function')
+                ? rawPatient.toObject() : JSON.parse(JSON.stringify(rawPatient));
 
-            // Filter visits based on date range
-            const filteredVisits = filterVisitsByDate(patient.visits || []);
+            let mergeKey;
+            if (patient.file_number) {
+                mergeKey = patient.file_number;
+            } else {
+                const normName = patient.normalized_name || normalizeName(patient.patient_name) || '';
+                mergeKey = `${patient.patient_phone}::${normName}`;
+            }
 
-            if (patientsMap.has(phoneKey)) {
-                // Merge with existing patient record
-                const existingPatient = patientsMap.get(phoneKey);
+            // Combine visits + all_visits and dedup by visit_id
+            const visitSeen = new Set();
+            const combinedVisits = [];
+            for (const v of [...(patient.all_visits || []), ...(patient.visits || [])]) {
+                const vid = v.visit_id || v._id?.toString?.() || '';
+                if (!vid || !visitSeen.has(vid)) {
+                    if (vid) visitSeen.add(vid);
+                    combinedVisits.push(v);
+                }
+            }
+            const filteredVisits = filterVisitsByDate(combinedVisits);
 
-                // Ensure existingPatient.visits is an array
+            if (patientsMap.has(mergeKey)) {
+                const existingPatient = patientsMap.get(mergeKey);
                 if (!existingPatient.visits || !Array.isArray(existingPatient.visits)) {
                     existingPatient.visits = [];
                 }
 
-                // Merge visits - combine all visits from both records (already filtered)
-                const existingFilteredVisits = filterVisitsByDate(existingPatient.visits || []);
-                const allVisits = [...(existingFilteredVisits || []), ...(filteredVisits || [])];
-
-                // Sort visits by date (newest first)
-                allVisits.sort((a, b) => {
+                // Dedup-merge visits
+                const existingIds = new Set(existingPatient.visits.map(v => v.visit_id || v._id?.toString?.() || ''));
+                for (const v of filteredVisits) {
+                    const vid = v.visit_id || v._id?.toString?.() || '';
+                    if (!vid || !existingIds.has(vid)) {
+                        existingIds.add(vid);
+                        existingPatient.visits.push(v);
+                    }
+                }
+                existingPatient.visits.sort((a, b) => {
                     const dateA = new Date(a.date || a.time || 0);
                     const dateB = new Date(b.date || b.time || 0);
                     return dateB - dateA;
                 });
 
-                // Update existing patient with merged data
-                // Keep the most recent patient info (name, age, address, etc.)
+                // Merge reports
+                const reportIds = new Set((existingPatient.reports || []).map(r => r.report_id || r._id?.toString?.() || ''));
+                for (const r of (patient.reports || [])) {
+                    const rid = r.report_id || r._id?.toString?.() || '';
+                    if (!rid || !reportIds.has(rid)) {
+                        reportIds.add(rid);
+                        if (!existingPatient.reports) existingPatient.reports = [];
+                        existingPatient.reports.push(r);
+                    }
+                }
+
+                // Merge medical_reports
+                const medIds = new Set((existingPatient.medical_reports || []).map(r => r.report_id || r._id?.toString?.() || ''));
+                for (const r of (patient.medical_reports || [])) {
+                    const rid = r.report_id || r._id?.toString?.() || '';
+                    if (!rid || !medIds.has(rid)) {
+                        medIds.add(rid);
+                        if (!existingPatient.medical_reports) existingPatient.medical_reports = [];
+                        existingPatient.medical_reports.push(r);
+                    }
+                }
+
+                // Merge referrals
+                const refIds = new Set((existingPatient.referrals || []).map(r => r.referral_id || r._id?.toString?.() || ''));
+                for (const r of (patient.referrals || [])) {
+                    const rid = r.referral_id || r._id?.toString?.() || '';
+                    if (!rid || !refIds.has(rid)) {
+                        refIds.add(rid);
+                        if (!existingPatient.referrals) existingPatient.referrals = [];
+                        existingPatient.referrals.push(r);
+                    }
+                }
+
+                // Merge complaint_history
+                const compIds = new Set((existingPatient.complaint_history || []).map(c => c._id?.toString?.() || ''));
+                for (const c of (patient.complaint_history || [])) {
+                    const cid = c._id?.toString?.() || '';
+                    if (!cid || !compIds.has(cid)) {
+                        compIds.add(cid);
+                        if (!existingPatient.complaint_history) existingPatient.complaint_history = [];
+                        existingPatient.complaint_history.push(c);
+                    }
+                }
+
+                // Keep most recent patient info
                 const existingDate = new Date(existingPatient.date || existingPatient.createdAt || 0);
                 const newDate = new Date(patient.date || patient.createdAt || 0);
-
                 if (newDate > existingDate) {
-                    // Newer patient record - update info but keep merged visits
                     existingPatient.patient_name = patient.patient_name || existingPatient.patient_name;
                     existingPatient.age = patient.age || existingPatient.age;
                     existingPatient.address = patient.address || existingPatient.address;
@@ -702,21 +763,10 @@ const getPatientsByDoctor = async (req, res) => {
                     existingPatient.date = patient.date || existingPatient.date;
                     existingPatient.time = patient.time || existingPatient.time;
                 }
-
-                // Update visits with merged list
-                existingPatient.visits = allVisits;
             } else {
-                // First occurrence of this phone number
-                // Convert Mongoose document to plain object if needed
-                let patientObj;
-                if (patient.toObject && typeof patient.toObject === 'function') {
-                    patientObj = patient.toObject();
-                } else {
-                    patientObj = JSON.parse(JSON.stringify(patient));
-                }
-                // Ensure visits array is always present, even if empty
-                patientObj.visits = filteredVisits || [];
-                patientsMap.set(phoneKey, patientObj);
+                patient.visits = filteredVisits || [];
+                patient.all_visits = [];
+                patientsMap.set(mergeKey, patient);
             }
         });
 
@@ -890,30 +940,44 @@ const getAllPatients = async (req, res) => {
             const sortObj = { createdAt: sortOrder === 'asc' ? 1 : -1 };
             const allScopePatients = await Patient.find(scopeFilter).sort(sortObj);
 
-            // Merge by normalized_phone: combine visits from all doctor docs for the same patient
+            // Merge by file_number (or phone+name for legacy records without file_number)
             const phoneMap = new Map();
             for (const p of allScopePatients) {
                 const po = p.toObject ? p.toObject() : { ...p };
-                const key = po.normalized_phone || normalizePhone(po.patient_phone) || po.patient_phone;
-                if (!key) { phoneMap.set(po._id?.toString() || Math.random(), po); continue; }
+                let key;
+                if (po.file_number) {
+                    key = po.file_number;
+                } else {
+                    const normPhone = po.normalized_phone || normalizePhone(po.patient_phone) || po.patient_phone;
+                    const normName = po.normalized_name || normalizeName(po.patient_name) || '';
+                    key = normPhone ? `${normPhone}::${normName}` : (po._id?.toString() || String(Math.random()));
+                }
+                // Combine visits + all_visits and dedup
+                const allVisitsArr = [...(po.all_visits || []), ...(po.visits || [])];
+                const dedupedVisits = [];
+                const vSeen = new Set();
+                for (const v of allVisitsArr) {
+                    const vid = v.visit_id || v._id?.toString() || '';
+                    if (!vid || !vSeen.has(vid)) { vSeen.add(vid); dedupedVisits.push(v); }
+                }
+                po.visits = dedupedVisits;
+                po.all_visits = [];
+
                 if (!phoneMap.has(key)) {
                     phoneMap.set(key, po);
                 } else {
                     const existing = phoneMap.get(key);
-                    // Merge visits
                     const visitSeen = new Set((existing.visits || []).map(v => v.visit_id || v._id?.toString()));
-                    for (const v of (po.visits || [])) {
+                    for (const v of po.visits) {
                         const vid = v.visit_id || v._id?.toString() || '';
                         if (!vid || !visitSeen.has(vid)) { visitSeen.add(vid); existing.visits.push(v); }
                     }
                     existing.visits.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
-                    // Keep most recent patient info
                     if (new Date(po.createdAt || 0) > new Date(existing.createdAt || 0)) {
                         existing.patient_name = po.patient_name || existing.patient_name;
                         existing.age = po.age || existing.age;
                         existing.address = po.address || existing.address;
                     }
-                    // Keep the first file_number found
                     if (!existing.file_number && po.file_number) existing.file_number = po.file_number;
                 }
             }
@@ -1254,13 +1318,18 @@ const getPatientByIdOrPhone = async (req, res) => {
             return res.status(200).json({ message: 'Patient found', patient: merged });
         }
 
-        // EXISTING PATH: single doctor lookup — unchanged for all current users
-        const patient = await Patient.findOne({
-            $and: [
-                { doctor_id },
-                { $or: [{ patient_phone: identifier }, { patient_id: identifier }] }
-            ]
-        });
+        // EXISTING PATH: single doctor lookup
+        // Try exact patient_id first, then fall back to phone (preferring most recent)
+        let patient = await Patient.findOne({ doctor_id, patient_id: identifier });
+        if (!patient) {
+            const norm = normalizePhone(identifier);
+            const phoneConditions = [{ patient_phone: identifier }];
+            if (norm) phoneConditions.push({ normalized_phone: norm });
+            patient = await Patient.findOne({
+                doctor_id,
+                $or: phoneConditions
+            }).sort({ updatedAt: -1 });
+        }
 
         if (!patient) {
             return res.status(404).json({ message: 'Patient not found' });
@@ -1532,9 +1601,20 @@ const getPatientsByPhone = async (req, res) => {
             return res.status(400).json({ message: 'phone and doctor_id are required' });
         }
         const norm = normalizePhone(phone);
-        const patients = await Patient.find({ doctor_id, normalized_phone: norm })
-            .select('patient_name file_number patient_id -_id')
+        const orConditions = [{ patient_phone: phone }];
+        if (norm) orConditions.push({ normalized_phone: norm });
+        const raw = await Patient.find({ doctor_id, $or: orConditions })
+            .select('patient_name file_number patient_id')
             .lean();
+        const seen = new Set();
+        const patients = [];
+        for (const p of raw) {
+            const key = p.patient_id || p._id?.toString();
+            if (!seen.has(key)) {
+                seen.add(key);
+                patients.push(p);
+            }
+        }
         return res.json({ patients });
     } catch (error) {
         console.error('Error fetching patients by phone:', error);

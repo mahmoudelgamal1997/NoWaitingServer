@@ -113,10 +113,18 @@ const getAllHistory = async (req, res) => {
             .limit(limitNum)
             .lean();
 
-        // Process patients to include visit counts and flatten visits
         const processedData = patients.map(patient => {
-            // Sort visits by date (most recent first)
-            const sortedVisits = [...(patient.visits || [])].sort((a, b) => {
+            // Merge visits + all_visits and dedup by visit_id for full history
+            const visitSeen = new Set();
+            const mergedVisits = [];
+            for (const v of [...(patient.all_visits || []), ...(patient.visits || [])]) {
+                const vid = v.visit_id || v._id?.toString?.() || '';
+                if (!vid || !visitSeen.has(vid)) {
+                    if (vid) visitSeen.add(vid);
+                    mergedVisits.push(v);
+                }
+            }
+            const sortedVisits = mergedVisits.sort((a, b) => {
                 const dateA = new Date(a.date || 0);
                 const dateB = new Date(b.date || 0);
                 return dateB.getTime() - dateA.getTime();
@@ -227,7 +235,15 @@ const getHistorySummary = async (req, res) => {
         const recentVisits = [];
 
         patients.forEach(patient => {
-            const visits = patient.visits || [];
+            const visitSeen = new Set();
+            const visits = [];
+            for (const v of [...(patient.all_visits || []), ...(patient.visits || [])]) {
+                const vid = v.visit_id || v._id?.toString?.() || '';
+                if (!vid || !visitSeen.has(vid)) {
+                    if (vid) visitSeen.add(vid);
+                    visits.push(v);
+                }
+            }
             totalVisits += visits.length;
 
             visits.forEach(visit => {
@@ -338,10 +354,17 @@ const getAllVisits = async (req, res) => {
         // Fetch patients
         const patients = await Patient.find(query).lean();
 
-        // Flatten all visits
         let allVisits = [];
         patients.forEach(patient => {
-            const visits = patient.visits || [];
+            const visitSeen = new Set();
+            const visits = [];
+            for (const v of [...(patient.all_visits || []), ...(patient.visits || [])]) {
+                const vid = v.visit_id || v._id?.toString?.() || '';
+                if (!vid || !visitSeen.has(vid)) {
+                    if (vid) visitSeen.add(vid);
+                    visits.push(v);
+                }
+            }
             visits.forEach(visit => {
                 // Apply date filter
                 if (startDate && new Date(visit.date) < new Date(startDate)) {
