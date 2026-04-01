@@ -82,14 +82,18 @@ const updateDoctorSettings = async (req, res) => {
 
             if (printSettings !== undefined) {
                 doctor.settings.printSettings = printSettings;
+                doctor.markModified('settings.printSettings');
             } else if (!doctor.settings.printSettings) {
                 doctor.settings.printSettings = {
                     paperSize: 'a4',
                     marginTop: 0,
+                    marginLeft: 0,
+                    marginRight: 0,
                     showHeader: true,
                     showFooter: true,
                     showPatientInfo: true
                 };
+                doctor.markModified('settings.printSettings');
             }
 
             doctor.updatedAt = new Date();

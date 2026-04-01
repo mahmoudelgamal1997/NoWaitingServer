@@ -72,11 +72,22 @@ const doctorSchema = new mongoose.Schema({
         printSettings: {
             paperSize: { type: String, default: 'a4' },
             marginTop: { type: Number, default: 0 },
+            marginLeft: { type: Number, default: 0 },
+            marginRight: { type: Number, default: 0 },
             showHeader: { type: Boolean, default: true },
             showFooter: { type: Boolean, default: true },
             showPatientInfo: { type: Boolean, default: true },
             customPaperWidth: Number,
-            customPaperHeight: Number
+            customPaperHeight: Number,
+            printLocale: { type: String, default: 'ar' },
+            prescriptionHeader: {
+                type: mongoose.Schema.Types.Mixed,
+                default: { enabled: false, leftLines: [], centerBadgeBase64: '', centerBadgeSize: 80, rightLines: [] }
+            },
+            prescriptionFooter: {
+                type: mongoose.Schema.Types.Mixed,
+                default: { enabled: false, lines: [] }
+            }
         }
     },
     createdAt: {
