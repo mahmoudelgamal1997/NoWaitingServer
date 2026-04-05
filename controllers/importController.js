@@ -110,7 +110,8 @@ const importLegacyData = async (req, res) => {
         const medicationsByVisit = groupBy(medicationsRows, r => safeStr(r['PatientsVisitsTreatmentsPatientsVisitsID']));
         const physioByVisit = groupBy(physioRows, r => safeStr(r['PatientsVisitsid']));
 
-        const CHUNK_SIZE = 100;
+        // Smaller chunks + event-loop yield reduce peak RAM on Heroku (R14) during large imports
+        const CHUNK_SIZE = 25;
         for (let i = 0; i < patientsRows.length; i += CHUNK_SIZE) {
             const chunk = patientsRows.slice(i, i + CHUNK_SIZE);
             await processPatientChunk(chunk, {
@@ -129,6 +130,7 @@ const importLegacyData = async (req, res) => {
                 physioByVisit,
                 summary
             });
+            await new Promise((resolve) => setImmediate(resolve));
         }
 
         return res.status(200).json({

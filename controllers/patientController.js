@@ -48,6 +48,12 @@ function normalizeName(name) {
     return name.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
+/** Mongoose doc or lean object → plain object (lean queries use far less RAM on large lists). */
+function toPlainPatientDoc(raw) {
+    if (raw == null) return raw;
+    return typeof raw.toObject === 'function' ? raw.toObject() : { ...raw };
+}
+
 // Levenshtein-based similarity in [0,1]; 1 = identical
 function nameSimilarity(a, b) {
     const s1 = (a || '').trim().replace(/\s+/g, ' ');
@@ -609,8 +615,8 @@ const getPatientsByDoctor = async (req, res) => {
 
         // IMPORTANT: For proper merging by phone number, we need to fetch all patients first
         // then merge, then paginate. This ensures accurate grouping.
-        // Fetch all matching patients first
-        let allPatients = await Patient.find(queryFilter).sort(sortObject);
+        // Fetch all matching patients first (lean: lower memory vs full Mongoose documents)
+        let allPatients = await Patient.find(queryFilter).sort(sortObject).lean();
 
         // Determine the max date for filtering visits
         // If endDate is provided, use it; otherwise use today
@@ -676,8 +682,7 @@ const getPatientsByDoctor = async (req, res) => {
         const patientsMap = new Map();
 
         allPatients.forEach(rawPatient => {
-            const patient = (rawPatient.toObject && typeof rawPatient.toObject === 'function')
-                ? rawPatient.toObject() : JSON.parse(JSON.stringify(rawPatient));
+            const patient = toPlainPatientDoc(rawPatient);
 
             let mergeKey;
             if (patient.file_number) {
@@ -953,12 +958,12 @@ const getAllPatients = async (req, res) => {
             }
 
             const sortObj = { createdAt: sortOrder === 'asc' ? 1 : -1 };
-            const allScopePatients = await Patient.find(scopeFilter).sort(sortObj);
+            const allScopePatients = await Patient.find(scopeFilter).sort(sortObj).lean();
 
             // Merge by file_number+phone (or phone+name for legacy records without file_number)
             const phoneMap = new Map();
             for (const p of allScopePatients) {
-                const po = p.toObject ? p.toObject() : { ...p };
+                const po = toPlainPatientDoc(p);
                 let key;
                 if (po.file_number) {
                     const normPhone = po.normalized_phone || normalizePhone(po.patient_phone) || po.patient_phone;
@@ -1097,13 +1102,12 @@ const getAllPatients = async (req, res) => {
 
         // Fetch all matching patients first, then merge duplicates by file_number,
         // then apply pagination — same approach as getPatientsByDoctor.
-        const allRawPatients = await Patient.find(filter).sort(sortObject);
+        const allRawPatients = await Patient.find(filter).sort(sortObject).lean();
 
         // Merge patients that share the same file_number (same person, multiple docs)
         const mergeMap = new Map();
         for (const rawP of allRawPatients) {
-            const p = (rawP.toObject && typeof rawP.toObject === 'function')
-                ? rawP.toObject() : JSON.parse(JSON.stringify(rawP));
+            const p = toPlainPatientDoc(rawP);
 
             let mergeKey;
             if (p.file_number) {
