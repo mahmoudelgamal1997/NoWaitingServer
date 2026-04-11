@@ -8,7 +8,8 @@ const {
     updatePatient,
     updatePatientVisitType,
     getOrGenerateFileNumber,
-    getPatientsByPhone
+    getPatientsByPhone,
+    updateReceipt
 } = require('../controllers/patientController');
 const {
     createPatientVisit,
@@ -36,6 +37,7 @@ router.get('/patients/doctor/:doctor_id', authenticateUser, getPatientsByDoctor)
 router.get('/patients', authenticateUser, getAllPatients);
 router.get('/patients/:identifier/doctor/:doctor_id', authenticateUser, getPatientByIdOrPhone);
 router.put('/patients/:id', authenticateUser, updatePatient);
+router.put('/patients/:id/visits/:visit_id/receipts/:receipt_id', authenticateUser, updateReceipt);
 router.put('/patients/:patient_id/visit-type', authenticateUser, updatePatientVisitType);
 
 // Visit-related routes

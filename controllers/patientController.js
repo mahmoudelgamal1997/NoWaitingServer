@@ -1758,6 +1758,55 @@ const getPatientsByPhone = async (req, res) => {
     }
 };
 
+// Edit an existing receipt inside a visit
+const updateReceipt = async (req, res) => {
+    try {
+        const { id: patientId, visit_id, receipt_id } = req.params;
+        const { drugs, notes, drugModel, prescriptionTemplate, investigations, obgynHistory, complaint, diagnosis } = req.body;
+
+        const patient = await Patient.findById(patientId);
+        if (!patient) return res.status(404).json({ message: 'Patient not found' });
+
+        const visitIndex = patient.visits.findIndex(v => v.visit_id === visit_id || v._id?.toString() === visit_id);
+        if (visitIndex === -1) return res.status(404).json({ message: 'Visit not found' });
+
+        const receiptIndex = patient.visits[visitIndex].receipts.findIndex(r => r._id?.toString() === receipt_id);
+        if (receiptIndex === -1) return res.status(404).json({ message: 'Receipt not found' });
+
+        // Update receipt fields
+        const receipt = patient.visits[visitIndex].receipts[receiptIndex];
+        if (drugs !== undefined) receipt.drugs = drugs;
+        if (notes !== undefined) receipt.notes = notes;
+        if (drugModel !== undefined) receipt.drugModel = drugModel;
+        if (prescriptionTemplate !== undefined) receipt.prescriptionTemplate = prescriptionTemplate;
+        if (investigations !== undefined) receipt.investigations = investigations;
+
+        // Update visit complaint/diagnosis if provided
+        if (complaint !== undefined) patient.visits[visitIndex].complaint = complaint;
+        if (diagnosis !== undefined) patient.visits[visitIndex].diagnosis = diagnosis;
+
+        // Update patient-level obgynHistory if provided
+        if (obgynHistory && typeof obgynHistory === 'object') {
+            patient.obgynHistory = { ...(patient.obgynHistory ? patient.obgynHistory.toObject() : {}), ...obgynHistory };
+        }
+
+        // Update legacy receipt string
+        if (drugs && drugs.length > 0) {
+            patient.receipt = drugs.map(d => `الدواء: ${d.drug} | التكرار: ${d.frequency} | المدة: ${d.period} | التوقيت: ${d.timing}`).join(' || ');
+        } else {
+            patient.receipt = notes || "روشتة بدون أدوية";
+        }
+
+        patient.markModified('visits');
+        await patient.save();
+
+        res.status(200).json({ message: 'Receipt updated successfully', patient });
+    } catch (error) {
+        console.error('Error updating receipt:', error);
+        res.status(500).json({ message: 'Error updating receipt', error: error.message });
+    }
+};
+
 module.exports = {
     savePatient,
     getAllPatients,
@@ -1766,5 +1815,6 @@ module.exports = {
     getPatientByIdOrPhone,
     updatePatientVisitType,
     getOrGenerateFileNumber,
-    getPatientsByPhone
+    getPatientsByPhone,
+    updateReceipt
 };
