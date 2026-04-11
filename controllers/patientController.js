@@ -1323,7 +1323,10 @@ const updatePatient = async (req, res) => {
             notes,
             visit_id,
             complaint,
-            diagnosis
+            diagnosis,
+            prescriptionTemplate,
+            investigations,
+            obgynHistory
         } = req.body;
 
         // Find the patient
@@ -1337,11 +1340,21 @@ const updatePatient = async (req, res) => {
             return res.status(403).json({ message: 'Not authorized to update this patient' });
         }
 
+        // Save obgynHistory on the patient (persists across visits)
+        if (obgynHistory && typeof obgynHistory === 'object') {
+            patient.obgynHistory = {
+                ...(patient.obgynHistory ? patient.obgynHistory.toObject() : {}),
+                ...obgynHistory
+            };
+        }
+
         // Prepare the receipt
         const newReceipt = {
             drugs: drugs || [],
             notes: notes || "",
             drugModel: drugModel || "new",
+            prescriptionTemplate: prescriptionTemplate || "default",
+            investigations: investigations || [],
             date: new Date()
         };
 

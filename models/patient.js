@@ -94,6 +94,14 @@ const receiptSchema = new mongoose.Schema({
     drugModel: {
         type: String,
         default: "new"
+    },
+    prescriptionTemplate: {
+        type: String,
+        default: "default"
+    },
+    investigations: {
+        type: [String],
+        default: []
     }
 });
 
@@ -318,7 +326,24 @@ const patientSchema = new mongoose.Schema({
             type: String,
             default: "" // Doctor's name for display
         }
-    }]
+    }],
+    obgynHistory: {
+        marriedSince: { type: String, default: "" },
+        gravidity: { type: Number, default: null },
+        parity: { type: Number, default: null },
+        living: { type: Number, default: null },
+        abortion: { type: Number, default: null },
+        deaths: { type: Number, default: null },
+        deliveryType: { type: String, default: "" },
+        deliverySince: { type: String, default: "" },
+        lmp: { type: String, default: "" },
+        edd: { type: String, default: "" },
+        medications: { type: String, default: "" },
+        pastHistory: { type: String, default: "" },
+        surgicalHistory: { type: String, default: "" },
+        consanguinity: { type: String, default: "" },
+        bloodGroup: { type: String, default: "" }
+    }
 }, {
     timestamps: true
 });
