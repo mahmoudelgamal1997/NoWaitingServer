@@ -343,7 +343,12 @@ const patientSchema = new mongoose.Schema({
         surgicalHistory: { type: String, default: "" },
         consanguinity: { type: String, default: "" },
         bloodGroup: { type: String, default: "" }
-    }
+    },
+    insurance_company_id: { type: String, default: '' },
+    insurance_company_name: { type: String, default: '' },
+    insurance_number: { type: String, default: '' },
+    coverage_percentage: { type: Number, default: 0 },
+    payment_type: { type: String, default: 'cash' }
 }, {
     timestamps: true
 });
