@@ -235,9 +235,15 @@ const getPatientVisitHistory = async (req, res) => {
                 file_number: patient.file_number,
                 _id: { $ne: patient._id }
             });
+            const patientNormName = (patient.normalized_name || patient.patient_name || '').trim();
             const siblings = allSiblings.filter(s => {
                 const sNorm = s.normalized_phone || normalizePhone(s.patient_phone);
-                return sNorm === patientNormPhone;
+                const phoneMatch = sNorm === patientNormPhone;
+                // Also accept a sibling with the same normalized name (covers phone typo cases
+                // where a new record was created for the same person with a slightly different phone)
+                const sNormName = (s.normalized_name || s.patient_name || '').trim();
+                const nameMatch = sNormName.length > 0 && sNormName === patientNormName;
+                return phoneMatch || nameMatch;
             });
             if (siblings.length > 0) allDocs = [patient, ...siblings];
         }
