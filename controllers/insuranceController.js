@@ -115,13 +115,18 @@ const getMonthlyReport = async (req, res) => {
             return res.status(400).json({ success: false, message: 'doctor_id, month, and year are required' });
         }
 
-        const paddedMonth = String(month).padStart(2, '0');
-        const datePrefix = `${year}-${paddedMonth}`;
+        const monthNum = parseInt(month);
+        const paddedMonth = String(monthNum).padStart(2, '0');
+
+        // Match both zero-padded ("2026-04-05") and non-padded ("2026-4-5") date formats
+        const dateRegex = monthNum < 10
+            ? `^${year}-(${monthNum}|${paddedMonth})-`
+            : `^${year}-${paddedMonth}-`;
 
         const query = {
             doctor_id,
             payment_type: 'insurance',
-            date: { $regex: `^${datePrefix}` }
+            date: { $regex: dateRegex }
         };
 
         if (company_id) {
@@ -147,15 +152,8 @@ const getMonthlyReport = async (req, res) => {
                 };
             }
 
-            // Calculate financials for each visit
-            // Use billing/receipt data if available, otherwise use consultation from visits
-            let fullFee = 0;
-            if (p.visits && p.visits.length > 0) {
-                const lastVisit = p.visits[p.visits.length - 1];
-                if (lastVisit.receipts && lastVisit.receipts.length > 0) {
-                    fullFee = lastVisit.receipts.reduce((sum, r) => sum + (r.amount || 0), 0);
-                }
-            }
+            // Full consultation fee saved when assistant marks patient as FINISHED
+            const fullFee = p.consultation_fee || 0;
 
             const coveragePct = p.coverage_percentage || 0;
             const companyPays = Math.round(fullFee * coveragePct) / 100;
@@ -218,7 +216,7 @@ const getAnalytics = async (req, res) => {
         const allPatients = await Patient.find({
             doctor_id,
             date: { $regex: `^${year}` }
-        }).select('payment_type date insurance_company_id insurance_company_name visits coverage_percentage');
+        }).select('payment_type date insurance_company_id insurance_company_name consultation_fee coverage_percentage');
 
         // Build monthly breakdown
         const monthlyData = {};
@@ -231,13 +229,7 @@ const getAnalytics = async (req, res) => {
             const monthStr = (p.date || '').slice(5, 7);
             if (!monthlyData[monthStr]) continue;
 
-            let fee = 0;
-            if (p.visits && p.visits.length > 0) {
-                const lastVisit = p.visits[p.visits.length - 1];
-                if (lastVisit.receipts && lastVisit.receipts.length > 0) {
-                    fee = lastVisit.receipts.reduce((sum, r) => sum + (r.amount || 0), 0);
-                }
-            }
+            const fee = p.consultation_fee || 0;
 
             if (p.payment_type === 'insurance') {
                 monthlyData[monthStr].insurance_count += 1;

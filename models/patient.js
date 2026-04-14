@@ -348,7 +348,8 @@ const patientSchema = new mongoose.Schema({
     insurance_company_name: { type: String, default: '' },
     insurance_number: { type: String, default: '' },
     coverage_percentage: { type: Number, default: 0 },
-    payment_type: { type: String, default: 'cash' }
+    payment_type: { type: String, default: 'cash' },
+    consultation_fee: { type: Number, default: 0 }
 }, {
     timestamps: true
 });
