@@ -109,30 +109,63 @@ const deleteCompany = async (req, res) => {
 const getMonthlyReport = async (req, res) => {
     try {
         const { doctor_id } = req.params;
-        const { month, year, company_id } = req.query;
+        const { month, year, company_id, date_from, date_to } = req.query;
 
-        if (!doctor_id || !month || !year) {
-            return res.status(400).json({ success: false, message: 'doctor_id, month, and year are required' });
+        if (!doctor_id) {
+            return res.status(400).json({ success: false, message: 'doctor_id is required' });
         }
 
-        const monthNum = parseInt(month);
-        const paddedMonth = String(monthNum).padStart(2, '0');
+        const query = { doctor_id, payment_type: 'insurance' };
 
-        // Match both zero-padded ("2026-04-05") and non-padded ("2026-4-5") date formats
-        const dateRegex = monthNum < 10
-            ? `^${year}-(${monthNum}|${paddedMonth})-`
-            : `^${year}-${paddedMonth}-`;
+        if (date_from || date_to) {
+            // Date-range mode: date_from and date_to are "YYYY-MM-DD" strings
+            // Build a regex that covers all dates in the range by collecting each
+            // date string between from and to (works for ranges up to ~400 days)
+            const from = date_from ? new Date(date_from + 'T00:00:00') : null;
+            const to   = date_to   ? new Date(date_to   + 'T23:59:59') : null;
 
-        const query = {
-            doctor_id,
-            payment_type: 'insurance',
-            date: { $regex: dateRegex }
-        };
+            // Use $in with all possible date strings (padded and unpadded) in the range
+            const dateStrings = [];
+            if (from && to) {
+                const cur = new Date(from);
+                while (cur <= to) {
+                    const y = cur.getFullYear();
+                    const m = cur.getMonth() + 1;
+                    const d = cur.getDate();
+                    dateStrings.push(`${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`);
+                    dateStrings.push(`${y}-${m}-${d}`);
+                    cur.setDate(cur.getDate() + 1);
+                }
+                query.date = { $in: dateStrings };
+            } else if (from) {
+                const y = from.getFullYear(), m = from.getMonth() + 1, d = from.getDate();
+                query.date = { $in: [
+                    `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`,
+                    `${y}-${m}-${d}`
+                ]};
+            } else if (to) {
+                // No from — use year prefix only
+                query.date = { $regex: `^${to.getFullYear()}` };
+            }
+        } else {
+            // Month/year mode (legacy) — required when no date range
+            if (!month || !year) {
+                return res.status(400).json({ success: false, message: 'Provide date_from/date_to or month+year' });
+            }
+            const monthNum = parseInt(month);
+            const paddedMonth = String(monthNum).padStart(2, '0');
+            // Match both zero-padded ("2026-04-05") and non-padded ("2026-4-5") formats
+            const dateRegex = monthNum < 10
+                ? `^${year}-(${monthNum}|${paddedMonth})-`
+                : `^${year}-${paddedMonth}-`;
+            query.date = { $regex: dateRegex };
+        }
 
         if (company_id) {
             query.insurance_company_id = company_id;
         }
 
+        const paddedMonth = month ? String(parseInt(month)).padStart(2, '0') : '';
         const patients = await Patient.find(query).sort({ date: 1, insurance_company_name: 1 });
 
         // Group by company
@@ -190,8 +223,10 @@ const getMonthlyReport = async (req, res) => {
         res.status(200).json({
             success: true,
             data: {
-                month: paddedMonth,
-                year,
+                month: paddedMonth || null,
+                year: year || null,
+                date_from: date_from || null,
+                date_to: date_to || null,
                 doctor_id,
                 companies,
                 totals

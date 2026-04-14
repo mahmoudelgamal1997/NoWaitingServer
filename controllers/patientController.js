@@ -245,7 +245,14 @@ const savePatient = async (req, res) => {
             visit_speed = "",
             clinic_id = "",
             assistant_id = "",
-            file_number: providedFileNumber = ""
+            file_number: providedFileNumber = "",
+            // Insurance fields
+            insurance_company_id = "",
+            insurance_company_name = "",
+            insurance_number = "",
+            coverage_percentage = 0,
+            payment_type = "cash",
+            consultation_fee = 0
         } = req.body;
 
 
@@ -392,6 +399,13 @@ const savePatient = async (req, res) => {
             if (normalizedPatientName && !existingPatient.normalized_name) {
                 existingPatient.normalized_name = normalizedPatientName;
             }
+            // Always update insurance fields for every visit (patient may have acquired insurance)
+            existingPatient.payment_type = payment_type || 'cash';
+            existingPatient.insurance_company_id = insurance_company_id || '';
+            existingPatient.insurance_company_name = insurance_company_name || '';
+            existingPatient.insurance_number = insurance_number || '';
+            existingPatient.coverage_percentage = coverage_percentage || 0;
+            if (consultation_fee > 0) existingPatient.consultation_fee = consultation_fee;
 
             await existingPatient.save();
 
@@ -479,6 +493,13 @@ const savePatient = async (req, res) => {
             visit_speed: visit_speed || "",
             clinic_id: clinic_id || "",
             assistant_id: assistant_id || "",
+            // Insurance fields
+            payment_type: payment_type || 'cash',
+            insurance_company_id: insurance_company_id || '',
+            insurance_company_name: insurance_company_name || '',
+            insurance_number: insurance_number || '',
+            coverage_percentage: coverage_percentage || 0,
+            consultation_fee: consultation_fee || 0,
             visits: [{
                 visit_id: uuidv4(),
                 date: date || new Date(),
