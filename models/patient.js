@@ -342,7 +342,9 @@ const patientSchema = new mongoose.Schema({
         pastHistory: { type: String, default: "" },
         surgicalHistory: { type: String, default: "" },
         consanguinity: { type: String, default: "" },
-        bloodGroup: { type: String, default: "" }
+        bloodGroup: { type: String, default: "" },
+        bloodPressure: { type: String, default: "" },
+        weight: { type: String, default: "" }
     },
     insurance_company_id: { type: String, default: '' },
     insurance_company_name: { type: String, default: '' },
