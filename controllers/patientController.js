@@ -1347,7 +1347,8 @@ const updatePatient = async (req, res) => {
             diagnosis,
             prescriptionTemplate,
             investigations,
-            obgynHistory
+            obgynHistory,
+            address
         } = req.body;
 
         // Find the patient
@@ -1359,6 +1360,11 @@ const updatePatient = async (req, res) => {
         // Check authorization
         if (doctor_id && patient.doctor_id !== doctor_id) {
             return res.status(403).json({ message: 'Not authorized to update this patient' });
+        }
+
+        // Update address if provided
+        if (address !== undefined) {
+            patient.address = address;
         }
 
         // Save obgynHistory on the patient (persists across visits)
