@@ -1,7 +1,6 @@
 const PackageModel = require('../models/package');
 const PatientPackage = require('../models/patientPackage');
 const PackageUsage = require('../models/packageUsage');
-const Billing = require('../models/billing');
 const Service = require('../models/service');
 const { v4: uuidv4 } = require('uuid');
 
@@ -236,42 +235,8 @@ const assignPackageToPatient = async (req, res) => {
 
         await patientPackage.save();
 
-        // Record package sale as revenue (billing) so it reflects in dashboard
-        const packageAmount = Number(pkg.price) || 0;
-        if (packageAmount > 0) {
-            try {
-                const billing = new Billing({
-                    billing_id: uuidv4(),
-                    doctor_id,
-                    patient_id,
-                    patient_name: patient_name || 'Patient',
-                    patient_phone: req.body.patient_phone || '',
-                    visit_id: '',
-                    clinic_id: clinic_id || '',
-                    consultationFee: 0,
-                    consultationType: '',
-                    services: [{
-                        service_id: pkg.service_id,
-                        service_name: pkg.name,
-                        price: packageAmount,
-                        quantity: 1,
-                        subtotal: packageAmount
-                    }],
-                    servicesTotal: packageAmount,
-                    subtotal: packageAmount,
-                    totalAmount: packageAmount,
-                    paymentStatus: 'paid',
-                    paymentMethod: 'cash',
-                    amountPaid: packageAmount,
-                    notes: `Package sale — ${pkg.name} (${pkg.sessions_count} sessions)`,
-                    billingDate: new Date()
-                });
-                await billing.save();
-            } catch (billingError) {
-                console.error('Error recording package sale as billing:', billingError);
-                // Don't fail the assign response — package was already assigned
-            }
-        }
+        // Billing is created when the assistant collects payment in the assistant portal
+        // (pending bill → paid), so revenue matches actual collection.
 
         res.status(201).json({
             success: true,
