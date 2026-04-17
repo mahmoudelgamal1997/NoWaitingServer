@@ -1,5 +1,6 @@
 const InsuranceCompany = require('../models/InsuranceCompany');
 const Patient = require('../models/patient');
+const PatientPackage = require('../models/patientPackage');
 const { v4: uuidv4 } = require('uuid');
 
 // ─── Company CRUD ─────────────────────────────────────────────────────────────
@@ -168,6 +169,23 @@ const getMonthlyReport = async (req, res) => {
         const paddedMonth = month ? String(parseInt(month)).padStart(2, '0') : '';
         const patients = await Patient.find(query).sort({ date: 1, insurance_company_name: 1 });
 
+        // Batch-fetch patient packages for all patients in the report
+        const uniquePatientIds = [...new Set(patients.map(p => p.patient_id).filter(Boolean))];
+        const patientPackages = uniquePatientIds.length > 0
+            ? await PatientPackage.find({ patient_id: { $in: uniquePatientIds }, doctor_id })
+                  .select('patient_id package_name total_sessions remaining_sessions status')
+                  .lean()
+            : [];
+
+        // Build a map: patient_id -> array of packages
+        const packagesByPatient = {};
+        for (const pkg of patientPackages) {
+            if (!packagesByPatient[pkg.patient_id]) {
+                packagesByPatient[pkg.patient_id] = [];
+            }
+            packagesByPatient[pkg.patient_id].push(pkg);
+        }
+
         // Group by company
         const grouped = {};
         for (const p of patients) {
@@ -192,8 +210,20 @@ const getMonthlyReport = async (req, res) => {
             const companyPays = Math.round(fullFee * coveragePct) / 100;
             const patientPays = fullFee - companyPays;
 
+            // Attach package info: prefer active packages, then most recent
+            const pkgs = packagesByPatient[p.patient_id] || [];
+            const activePkgs = pkgs.filter(pk => pk.status === 'active');
+            const relevantPkgs = activePkgs.length > 0 ? activePkgs : pkgs;
+            const packageInfo = relevantPkgs.map(pk => ({
+                package_name: pk.package_name,
+                total_sessions: pk.total_sessions,
+                remaining_sessions: pk.remaining_sessions,
+                used_sessions: pk.total_sessions - pk.remaining_sessions,
+                status: pk.status
+            }));
+
             grouped[cid].patients.push({
-                patient_id: p._id,
+                patient_id: p.patient_id,
                 patient_name: p.patient_name,
                 patient_phone: p.patient_phone,
                 file_number: p.file_number,
@@ -203,7 +233,8 @@ const getMonthlyReport = async (req, res) => {
                 full_fee: fullFee,
                 patient_paid: patientPays,
                 company_owes: companyPays,
-                coverage_percentage: coveragePct
+                coverage_percentage: coveragePct,
+                packages: packageInfo
             });
 
             grouped[cid].total_full_fee += fullFee;
