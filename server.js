@@ -27,6 +27,7 @@ const expenseRoutes = require('./routes/expenseRoutes');
 const fixedExpenseRoutes = require('./routes/fixedExpenseRoutes');
 const importRoutes = require('./routes/importRoutes');
 const insuranceRoutes = require('./routes/insuranceRoutes');
+const mazbotRoutes = require('./routes/mazbotRoutes');
 
 const cors = require('cors');
 
@@ -37,6 +38,8 @@ dotenv.config();
 connectDB();
 
 const app = express();
+// Heroku / reverse proxy: correct req.protocol and host for public URLs (MazBot PDF links)
+app.set('trust proxy', 1);
 
 // Updated CORS configuration with cache-control headers
 // Allow all origins for development (restrict in production if needed)
@@ -118,6 +121,7 @@ app.use('/api', expenseRoutes);
 app.use('/api', fixedExpenseRoutes);
 app.use('/api', importRoutes);
 app.use('/api/insurance', insuranceRoutes);
+app.use('/api', mazbotRoutes);
 
 // Error handling middleware - must be after routes
 app.use((err, req, res, next) => {
