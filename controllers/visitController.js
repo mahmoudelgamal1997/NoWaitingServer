@@ -343,7 +343,7 @@ const addComplaintHistory = async (req, res) => {
 const updatePatientVisit = async (req, res) => {
     try {
         const { patient_id, doctor_id, visit_id } = req.params;
-        const { drugs, complaint, diagnosis } = req.body;
+        const { drugs, complaint, diagnosis, diagram_data } = req.body;
 
         // Find the patient
         const patient = await Patient.findOne({ patient_id, doctor_id });
@@ -376,6 +376,11 @@ const updatePatientVisit = async (req, res) => {
         // Update visit details
         if (complaint) patient.visits[visitIndex].complaint = complaint;
         if (diagnosis) patient.visits[visitIndex].diagnosis = diagnosis;
+        // Save diagram data (dental chart or body map annotations) when provided
+        if (diagram_data !== undefined) {
+            patient.visits[visitIndex].diagram_data = diagram_data;
+            patient.markModified(`visits.${visitIndex}.diagram_data`);
+        }
 
         // Add new drugs to the visit's receipts if provided
         if (drugs && drugs.length > 0) {

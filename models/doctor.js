@@ -68,6 +68,12 @@ const doctorSchema = new mongoose.Schema({
             type: [String],
             default: []
         },
+        // Diagram type for interactive patient visit diagrams
+        diagramType: {
+            type: String,
+            enum: ['none', 'dental', 'body'],
+            default: 'none'
+        },
         // Print Settings
         printSettings: {
             paperSize: { type: String, default: 'a4' },

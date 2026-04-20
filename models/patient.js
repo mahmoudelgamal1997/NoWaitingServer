@@ -141,6 +141,11 @@ const visitSchema = new mongoose.Schema({
     billing_id: {
         type: String,
         default: ""
+    },
+    // Interactive specialty diagram data (dental chart or body map) saved per visit
+    diagram_data: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null
     }
 }, { _id: true });
 
